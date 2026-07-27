@@ -1,0 +1,41 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    @apply bg-slate-50 text-slate-800 antialiased font-sans;
+  }
+  
+  /* Modern scrollbar styles */
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  
+  ::-webkit-scrollbar-track {
+    @apply bg-slate-100;
+  }
+  
+  ::-webkit-scrollbar-thumb {
+    @apply bg-slate-300 rounded-full hover:bg-slate-400;
+  }
+}
+
+/* Custom Dotted Grid for Blueprint Layouts */
+.blueprint-grid {
+  background-size: 24px 24px;
+  background-image: radial-gradient(circle, #e2e8f0 1.5px, transparent 1.5px);
+  background-color: #ffffff;
+}
+
+.blueprint-grid-dark {
+  background-size: 24px 24px;
+  background-image: radial-gradient(circle, #334155 1.5px, transparent 1.5px);
+  background-color: #0f172a;
+}
+
+/* Toast container override styles for premium MES vibe */
+.Toastify__toast {
+  @apply rounded-custom border border-slate-100 shadow-soft font-sans;
+}
