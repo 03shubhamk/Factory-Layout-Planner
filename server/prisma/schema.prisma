@@ -1,0 +1,57 @@
+datasource db {
+  provider = "sqlite"
+  url      = "file:./dev.db"
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model Factory {
+  id              String           @id @default(uuid())
+  name            String
+  length          Float
+  width           Float
+  departmentCount Int
+  description     String?
+  createdAt       DateTime         @default(now())
+  machines        Machine[]
+  productionFlow  ProductionFlow[]
+  reports         Report[]
+}
+
+model Machine {
+  id              String           @id @default(uuid())
+  factoryId       String
+  factory         Factory          @relation(fields: [factoryId], references: [id], onDelete: Cascade)
+  machineName     String
+  machineType     String
+  x               Float
+  y               Float
+  orientation     Int              @default(0) // Orientation in degrees (0, 90, 180, 270)
+  status          String           @default("Idle") // Idle, Running, Maintenance
+  throughput      Int              @default(100) // Simulated KPI: throughput in units/hr
+  health          String           @default("Optimal") // Optimal, Maintenance Required
+  load            Int              @default(50) // Load percentage
+  productionFlows ProductionFlow[]
+}
+
+model ProductionFlow {
+  id        String   @id @default(uuid())
+  factoryId String
+  factory   Factory  @relation(fields: [factoryId], references: [id], onDelete: Cascade)
+  step      Int      // 1-indexed order of operations
+  machineId String
+  machine   Machine  @relation(fields: [machineId], references: [id], onDelete: Cascade)
+}
+
+model Report {
+  id          String   @id @default(uuid())
+  factoryId   String
+  factory     Factory  @relation(fields: [factoryId], references: [id], onDelete: Cascade)
+  distance    Float
+  efficiency  Float
+  rating      String
+  suggestions String   // JSON string of optimization suggestions
+  createdAt   DateTime @default(now())
+}
