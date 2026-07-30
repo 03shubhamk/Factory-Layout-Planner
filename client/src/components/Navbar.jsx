@@ -49,6 +49,16 @@ export default function Navbar() {
               Designer
             </button>
             <button
+              onClick={() => navigate(`/flow/${activeFactory.id}`)}
+              className={`px-3 py-1.5 text-xs font-semibold rounded-md transition-all ${
+                location.pathname.startsWith('/flow')
+                  ? 'bg-white text-slate-900 shadow-sm'
+                  : 'text-slate-500 hover:text-slate-900'
+              }`}
+            >
+              Flow
+            </button>
+            <button
               onClick={() => handleTabChange('analysis')}
               className={`px-3 py-1.5 text-xs font-semibold rounded-md transition-all ${
                 activeTab === 'analysis'
