@@ -39,3 +39,30 @@
 .Toastify__toast {
   @apply rounded-custom border border-slate-100 shadow-soft font-sans;
 }
+
+/* SVG Path Dash and Particle Motion Keyframes */
+@keyframes flowDash {
+  to {
+    stroke-dashoffset: -20;
+  }
+}
+
+.animate-flow-dash {
+  animation: flowDash 1s linear infinite;
+}
+
+@keyframes pulseGlow {
+  0%, 100% {
+    opacity: 0.3;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.8;
+    transform: scale(1.15);
+  }
+}
+
+.animate-pulse-glow {
+  animation: pulseGlow 2s ease-in-out infinite;
+}
+
