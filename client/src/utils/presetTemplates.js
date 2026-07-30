@@ -61,4 +61,8 @@ export const PRESET_TEMPLATES = [
   }
 ];
 
+export function getPresetById(presetId) {
+  return PRESET_TEMPLATES.find(template => template.id === presetId) || null;
+}
+
 export default PRESET_TEMPLATES;
