@@ -1,12 +1,14 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useFactory } from '../context/FactoryContext';
-import { Info, AlertTriangle, ArrowLeft } from 'lucide-react';
+import { Info, AlertTriangle, ArrowLeft, Sparkles, Check } from 'lucide-react';
+import PRESET_TEMPLATES from '../utils/presetTemplates';
 
 export default function CreateFactory() {
   const navigate = useNavigate();
-  const { createNewFactory, loadFactoryDetails } = useFactory();
+  const { createNewFactory, loadFactoryDetails, addMachine, saveFlow } = useFactory();
 
+  const [selectedPresetId, setSelectedPresetId] = useState(null);
   const [formData, setFormData] = useState({
     name: '',
     length: '100',
@@ -56,6 +58,21 @@ export default function CreateFactory() {
     return Object.keys(errors).length === 0;
   };
 
+  const handleSelectPreset = (tmpl) => {
+    if (selectedPresetId === tmpl.id) {
+      setSelectedPresetId(null);
+      return;
+    }
+    setSelectedPresetId(tmpl.id);
+    setFormData({
+      name: tmpl.name,
+      length: String(tmpl.defaultDimensions.length),
+      width: String(tmpl.defaultDimensions.width),
+      departmentCount: tmpl.defaultDimensions.departmentCount,
+      description: tmpl.description
+    });
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!validate()) return;
@@ -72,6 +89,33 @@ export default function CreateFactory() {
       // Load details of the created factory to establish context
       await loadFactoryDetails(created.id);
       
+      // If preset template was selected, populate machines and flow
+      if (selectedPresetId) {
+        const tmpl = PRESET_TEMPLATES.find(t => t.id === selectedPresetId);
+        if (tmpl) {
+          const createdIds = [];
+          for (const mDef of tmpl.machines) {
+            const newM = await addMachine({
+              machineName: mDef.machineName,
+              machineType: mDef.machineType,
+              x: mDef.x,
+              y: mDef.y,
+              orientation: mDef.orientation,
+              status: mDef.status,
+              throughput: mDef.throughput,
+              health: mDef.health,
+              load: mDef.load
+            });
+            if (newM && newM.id) {
+              createdIds.push(newM.id);
+            }
+          }
+          if (createdIds.length > 0) {
+            await saveFlow(createdIds);
+          }
+        }
+      }
+
       // Redirect to the newly initialized layout designer
       navigate(`/designer/${created.id}`);
     } catch (err) {
@@ -100,11 +144,50 @@ export default function CreateFactory() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-start">
         {/* Form Container */}
         <div className="lg:col-span-2 bg-white rounded-custom border border-slate-200 shadow-soft p-8 space-y-6">
-          <div>
-            <h1 className="text-2xl font-bold text-slate-900">Create New Factory</h1>
-            <p className="text-sm text-slate-500 mt-1">
-              Define your industrial workspace parameters to initialize the 3D layout engine.
-            </p>
+          {/* Preset Industry Template Quick Selector */}
+          <div className="space-y-3 bg-slate-50 p-4 rounded-xl border border-slate-200">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
+                <Sparkles className="w-3.5 h-3.5 text-blue-600" />
+                <span>Start from Industry Preset (Optional)</span>
+              </span>
+              {selectedPresetId && (
+                <button
+                  type="button"
+                  onClick={() => setSelectedPresetId(null)}
+                  className="text-[10px] font-bold text-slate-500 hover:text-slate-700 underline"
+                >
+                  Clear Selection
+                </button>
+              )}
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              {PRESET_TEMPLATES.map((tmpl) => {
+                const isSelected = selectedPresetId === tmpl.id;
+                return (
+                  <button
+                    key={tmpl.id}
+                    type="button"
+                    onClick={() => handleSelectPreset(tmpl)}
+                    className={`p-3 rounded-lg border text-left transition-all relative flex items-start gap-3 ${
+                      isSelected
+                        ? 'border-blue-600 bg-blue-50/50 ring-2 ring-blue-600/20'
+                        : 'border-slate-200 bg-white hover:border-slate-300 shadow-sm'
+                    }`}
+                  >
+                    <span className="text-2xl">{tmpl.icon}</span>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-bold text-slate-900 truncate">{tmpl.name}</span>
+                        {isSelected && <Check className="w-3.5 h-3.5 text-blue-600 shrink-0" />}
+                      </div>
+                      <span className="text-[10px] text-slate-500 line-clamp-1 mt-0.5">{tmpl.description}</span>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-6">
