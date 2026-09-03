@@ -1,8 +1,14 @@
 import { Router } from 'express';
 import { PrismaClient } from '@prisma/client';
+import { injectAnomaly, resetAnomaly, ingestExternalTelemetry } from '../services/iotSimulator.js';
 
 const router = Router();
 const prisma = new PrismaClient();
+
+let ioInstance = null;
+export function setSocketIOInstance(io) {
+  ioInstance = io;
+}
 
 // ==========================================
 // FACTORIES ENDPOINTS
@@ -307,4 +313,48 @@ router.post('/factories/:id/reports', async (req, res) => {
   }
 });
 
+// ==========================================
+// TELEMETRY & IOT / OPC-UA ENDPOINTS
+// ==========================================
+
+// Inject machine anomaly (e.g. OVERHEAT, VIBRATION, SPINDLE_JAM, POWER_SURGE)
+router.post('/factories/:id/telemetry/inject-anomaly', (req, res) => {
+  const { id: factoryId } = req.params;
+  const { machineId, type } = req.body;
+
+  if (!machineId || !type) {
+    return res.status(400).json({ error: 'machineId and anomaly type are required' });
+  }
+
+  injectAnomaly(factoryId, machineId, type, ioInstance);
+  res.json({ success: true, message: `Anomaly ${type} injected into machine ${machineId}` });
+});
+
+// Reset machine anomaly
+router.post('/factories/:id/telemetry/reset-anomaly', (req, res) => {
+  const { id: factoryId } = req.params;
+  const { machineId } = req.body;
+
+  if (!machineId) {
+    return res.status(400).json({ error: 'machineId is required' });
+  }
+
+  resetAnomaly(factoryId, machineId, ioInstance);
+  res.json({ success: true, message: `Anomaly reset for machine ${machineId}` });
+});
+
+// Ingest simulated MQTT/OPC-UA payload directly from edge devices
+router.post('/factories/:id/telemetry/publish', (req, res) => {
+  const { id: factoryId } = req.params;
+  const { machineId, payload } = req.body;
+
+  if (!machineId || !payload) {
+    return res.status(400).json({ error: 'machineId and payload are required' });
+  }
+
+  ingestExternalTelemetry(factoryId, machineId, payload, ioInstance);
+  res.json({ success: true, message: 'Telemetry received and queued for broadcast' });
+});
+
 export default router;
+
