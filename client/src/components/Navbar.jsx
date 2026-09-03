@@ -11,9 +11,11 @@ export default function Navbar() {
   // Determine active project page layout tab
   const getActiveTab = () => {
     if (location.pathname.startsWith('/designer')) return 'designer';
+    if (location.pathname.startsWith('/flow')) return 'flow';
     if (location.pathname.startsWith('/analysis')) return 'analysis';
     if (location.pathname.startsWith('/suggestions')) return 'suggestions';
     if (location.pathname.startsWith('/report')) return 'report';
+    if (location.pathname.startsWith('/telemetry')) return 'telemetry';
     return null;
   };
 
@@ -22,9 +24,11 @@ export default function Navbar() {
   const handleTabChange = (tab) => {
     if (!activeFactory) return;
     if (tab === 'designer') navigate(`/designer/${activeFactory.id}`);
+    if (tab === 'flow') navigate(`/flow/${activeFactory.id}`);
     if (tab === 'analysis') navigate(`/analysis/${activeFactory.id}`);
     if (tab === 'suggestions') navigate(`/suggestions/${activeFactory.id}`);
     if (tab === 'report') navigate(`/report/${activeFactory.id}`);
+    if (tab === 'telemetry') navigate(`/telemetry/${activeFactory.id}`);
   };
 
   return (
@@ -36,7 +40,7 @@ export default function Navbar() {
         </span>
 
         {/* Dynamic Context Tabs */}
-        {activeFactory && activeTab && (
+        {activeFactory && (
           <nav className="flex space-x-1 bg-slate-100 p-1 rounded-lg">
             <button
               onClick={() => handleTabChange('designer')}
@@ -49,9 +53,9 @@ export default function Navbar() {
               Designer
             </button>
             <button
-              onClick={() => navigate(`/flow/${activeFactory.id}`)}
+              onClick={() => handleTabChange('flow')}
               className={`px-3 py-1.5 text-xs font-semibold rounded-md transition-all ${
-                location.pathname.startsWith('/flow')
+                activeTab === 'flow'
                   ? 'bg-white text-slate-900 shadow-sm'
                   : 'text-slate-500 hover:text-slate-900'
               }`}
@@ -87,6 +91,17 @@ export default function Navbar() {
               }`}
             >
               Report
+            </button>
+            <button
+              onClick={() => handleTabChange('telemetry')}
+              className={`px-3 py-1.5 text-xs font-semibold rounded-md transition-all flex items-center gap-1.5 ${
+                activeTab === 'telemetry'
+                  ? 'bg-slate-900 text-white shadow-sm'
+                  : 'text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50'
+              }`}
+            >
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+              <span>Live Telemetry</span>
             </button>
           </nav>
         )}
