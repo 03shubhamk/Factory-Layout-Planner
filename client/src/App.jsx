@@ -1,6 +1,7 @@
 import React from 'react';
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import { FactoryProvider } from './context/FactoryContext';
+import { TelemetryProvider } from './context/TelemetryContext';
 import { ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 
@@ -16,6 +17,7 @@ import ProductionFlow from './pages/ProductionFlow';
 import Analysis from './pages/Analysis';
 import Suggestions from './pages/Suggestions';
 import Reports from './pages/Reports';
+import LiveCommandCenter from './pages/LiveCommandCenter';
 
 function AppContent() {
   return (
@@ -37,6 +39,7 @@ function AppContent() {
           <Route path="/analysis/:id" element={<Analysis />} />
           <Route path="/suggestions/:id" element={<Suggestions />} />
           <Route path="/report/:id" element={<Reports />} />
+          <Route path="/telemetry/:id" element={<LiveCommandCenter />} />
         </Routes>
       </div>
     </div>
@@ -47,20 +50,23 @@ export default function App() {
   return (
     <BrowserRouter>
       <FactoryProvider>
-        <AppContent />
-        <ToastContainer 
-          position="bottom-right" 
-          autoClose={3000} 
-          hideProgressBar={false}
-          newestOnTop
-          closeOnClick
-          rtl={false}
-          pauseOnFocusLoss
-          draggable
-          pauseOnHover
-          theme="light"
-        />
+        <TelemetryProvider>
+          <AppContent />
+          <ToastContainer 
+            position="bottom-right" 
+            autoClose={3000} 
+            hideProgressBar={false}
+            newestOnTop
+            closeOnClick
+            rtl={false}
+            pauseOnFocusLoss
+            draggable
+            pauseOnHover
+            theme="light"
+          />
+        </TelemetryProvider>
       </FactoryProvider>
     </BrowserRouter>
   );
 }
+
