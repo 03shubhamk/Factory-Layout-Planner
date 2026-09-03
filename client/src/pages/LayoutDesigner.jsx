@@ -20,9 +20,13 @@ import {
   Zap,
   FastForward,
   Sparkles,
-  ChevronDown
+  ChevronDown,
+  Radio
 } from 'lucide-react';
 import PRESET_TEMPLATES from '../utils/presetTemplates';
+import { useTelemetry } from '../context/TelemetryContext';
+import LiveTelemetryBadge from '../components/LiveTelemetryBadge';
+import MachineTelemetryDrawer from '../components/MachineTelemetryDrawer';
 
 export default function LayoutDesigner() {
   const { id } = useParams();
@@ -38,7 +42,10 @@ export default function LayoutDesigner() {
     saveFlow 
   } = useFactory();
 
+  const { telemetryByMachine, isConnected } = useTelemetry();
+
   const [selectedMachineId, setSelectedMachineId] = useState(null);
+  const [inspectingMachine, setInspectingMachine] = useState(null);
   const [zoomLevel, setZoomLevel] = useState(1); // Scale multiplier
   const [snapToGrid, setSnapToGrid] = useState(true);
   
@@ -47,6 +54,7 @@ export default function LayoutDesigner() {
   const [simSpeed, setSimSpeed] = useState(1); // 1, 2, 4
   const [showHeatmap, setShowHeatmap] = useState(false);
   const [showPresetMenu, setShowPresetMenu] = useState(false);
+
 
   // Track dragging & panning state
   const [draggingMachineId, setDraggingMachineId] = useState(null);
@@ -416,10 +424,22 @@ export default function LayoutDesigner() {
                   </div>
                 )}
               </div>
+
+              {/* Live IoT Gateway Status Badge & Fleet Link */}
+              <LiveTelemetryBadge minimal={true} />
+              <button
+                onClick={() => navigate(`/telemetry/${activeFactory.id}`)}
+                className="h-8 px-2.5 bg-slate-900 hover:bg-slate-800 text-slate-200 rounded-lg text-xs font-mono font-bold flex items-center gap-1.5 transition-all border border-slate-700 shrink-0 shadow-2xs"
+                title="Open Live MES Command Center"
+              >
+                <Radio className="w-3.5 h-3.5 text-emerald-400 animate-pulse" />
+                <span className="hidden sm:inline">FLEET MONITOR</span>
+              </button>
             </div>
 
             {/* Right Section: Simulation, Heatmap & Zoom */}
             <div className="flex items-center gap-2 shrink-0">
+
               {/* Play / Pause Toggle */}
               <button
                 onClick={() => setIsSimulating(!isSimulating)}
@@ -746,6 +766,10 @@ export default function LayoutDesigner() {
                 const posX = getMachX(mach);
                 const posY = getMachY(mach);
 
+                const tel = telemetryByMachine[mach.id];
+                const isAlarm = tel?.status === 'Alarm' || tel?.alert !== null;
+                const isOverheating = tel && tel.temp > 75;
+
                 // Position machine absolutely inside the grid container using percentages
                 const machinePositionStyle = {
                   left: `${(posX / activeFactory.length) * 100}%`,
@@ -760,22 +784,48 @@ export default function LayoutDesigner() {
                   <div
                     key={mach.id}
                     onMouseDown={(e) => handleGridMouseDown(e, mach)}
+                    onDoubleClick={() => setInspectingMachine(mach)}
                     style={machinePositionStyle}
                     className={`absolute rounded border flex flex-col items-center justify-center cursor-move transition-all select-none z-20 shadow-sm ${
-                      isSelected 
-                        ? 'border-primary bg-blue-50 ring-2 ring-primary/20' 
-                        : 'border-slate-300 bg-white hover:border-slate-400'
+                      isAlarm 
+                        ? 'border-rose-500 bg-rose-50 ring-4 ring-rose-500/40 animate-pulse' 
+                        : isSelected 
+                          ? 'border-primary bg-blue-50 ring-2 ring-primary/20' 
+                          : 'border-slate-300 bg-white hover:border-slate-400'
                     }`}
                   >
                     {/* Machine ID Tag */}
-                    <div className="absolute -top-5 left-1/2 -translate-x-1/2 bg-slate-800 text-white text-[8px] font-bold font-mono px-1 rounded border border-slate-700 pointer-events-none whitespace-nowrap">
-                      {mach.machineName.split(' ')[0].substring(0, 4)}-{mach.machineName.split(' ')[1] || '01'}
+                    <div className="absolute -top-5 left-1/2 -translate-x-1/2 bg-slate-800 text-white text-[8px] font-bold font-mono px-1 rounded border border-slate-700 pointer-events-none whitespace-nowrap flex items-center gap-1">
+                      {isAlarm && <span className="w-1.5 h-1.5 rounded-full bg-rose-500 animate-ping"></span>}
+                      <span>{mach.machineName.split(' ')[0].substring(0, 4)}-{mach.machineName.split(' ')[1] || '01'}</span>
                     </div>
 
-                    {/* Machine Status Dot */}
+                    {/* Machine Status Dot / Alarm Beacon */}
                     <div className={`absolute top-1 right-1 w-1.5 h-1.5 rounded-full ${
-                      mach.status === 'Running' ? 'bg-success animate-pulse' : 'bg-slate-400'
+                      isAlarm 
+                        ? 'bg-rose-600 animate-ping' 
+                        : mach.status === 'Running' 
+                          ? 'bg-success animate-pulse' 
+                          : 'bg-slate-400'
                     }`}></div>
+
+                    {/* Live Temperature Pill */}
+                    {tel && (
+                      <div 
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setInspectingMachine(mach);
+                        }}
+                        title="Click to view live telemetry"
+                        className={`absolute -bottom-3 left-1/2 -translate-x-1/2 text-[7px] font-mono font-bold px-1 rounded border shadow-2xs cursor-pointer ${
+                          isOverheating 
+                            ? 'bg-rose-500 text-white border-rose-600 animate-bounce' 
+                            : 'bg-slate-900 text-slate-200 border-slate-700 hover:bg-primary'
+                        }`}
+                      >
+                        {tel.temp}°C
+                      </div>
+                    )}
 
                     {/* Asset Graphic/Icon */}
                     <span className="text-sm">
@@ -956,6 +1006,60 @@ export default function LayoutDesigner() {
                 </span>
               </div>
 
+              {/* Live Telemetry & Sensor Dials */}
+              {selectedMachine && (
+                <div className="space-y-3 border-t border-slate-100 pt-4 bg-slate-900 -mx-4 -mb-4 p-4 rounded-b-lg text-slate-100">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[10px] font-bold text-slate-300 uppercase tracking-wider flex items-center gap-1.5">
+                      <Radio className="w-3 h-3 text-emerald-400 animate-pulse" />
+                      Live Edge Telemetry
+                    </span>
+                    <span className="text-[9px] font-mono text-emerald-400">ONLINE</span>
+                  </div>
+
+                  {(() => {
+                    const selTel = telemetryByMachine[selectedMachine.id] || {
+                      temp: 45,
+                      vibration: 1.2,
+                      rpm: 1200,
+                      powerKw: 12.0
+                    };
+                    return (
+                      <div className="grid grid-cols-2 gap-2 text-center text-xs font-mono">
+                        <div className="bg-slate-950 p-2 rounded border border-slate-800">
+                          <span className="text-[9px] text-slate-400 uppercase block">Temp</span>
+                          <span className={`font-bold ${selTel.temp > 75 ? 'text-rose-400' : 'text-white'}`}>
+                            {selTel.temp}°C
+                          </span>
+                        </div>
+                        <div className="bg-slate-950 p-2 rounded border border-slate-800">
+                          <span className="text-[9px] text-slate-400 uppercase block">Vib</span>
+                          <span className={`font-bold ${selTel.vibration > 4.5 ? 'text-amber-400' : 'text-white'}`}>
+                            {selTel.vibration} mm/s
+                          </span>
+                        </div>
+                        <div className="bg-slate-950 p-2 rounded border border-slate-800">
+                          <span className="text-[9px] text-slate-400 uppercase block">Spindle</span>
+                          <span className="font-bold text-white">{selTel.rpm} RPM</span>
+                        </div>
+                        <div className="bg-slate-950 p-2 rounded border border-slate-800">
+                          <span className="text-[9px] text-slate-400 uppercase block">Power</span>
+                          <span className="font-bold text-amber-300">{selTel.powerKw} kW</span>
+                        </div>
+                      </div>
+                    );
+                  })()}
+
+                  <button
+                    onClick={() => setInspectingMachine(selectedMachine)}
+                    className="w-full py-2 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white rounded text-xs font-bold transition-all shadow-sm flex items-center justify-center gap-1.5"
+                  >
+                    <Activity className="w-3.5 h-3.5" />
+                    <span>Inspect Live Waveforms & Faults</span>
+                  </button>
+                </div>
+              )}
+
               {/* Delete Button */}
               <div className="pt-4 border-t border-slate-100 flex justify-end">
                 <button
@@ -1011,6 +1115,15 @@ export default function LayoutDesigner() {
           </button>
         </div>
       </footer>
+
+      {/* Slide-over Machine Telemetry Drawer */}
+      {inspectingMachine && (
+        <MachineTelemetryDrawer 
+          machine={inspectingMachine} 
+          onClose={() => setInspectingMachine(null)} 
+        />
+      )}
     </div>
   );
 }
+
