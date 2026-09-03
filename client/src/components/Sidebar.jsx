@@ -12,7 +12,8 @@ import {
   Settings, 
   Wrench, 
   HelpCircle,
-  Plus
+  Plus,
+  Radio
 } from 'lucide-react';
 
 export default function Sidebar() {
@@ -27,8 +28,10 @@ export default function Sidebar() {
     { name: 'Production Flow', path: activeFactory ? `/flow/${activeFactory.id}` : '#', icon: GitCommit, requiresFactory: true },
     { name: 'Analysis', path: activeFactory ? `/analysis/${activeFactory.id}` : '#', icon: BarChart2, requiresFactory: true },
     { name: 'Suggestions', path: activeFactory ? `/suggestions/${activeFactory.id}` : '#', icon: Lightbulb, requiresFactory: true },
+    { name: 'Live Telemetry', path: activeFactory ? `/telemetry/${activeFactory.id}` : '#', icon: Radio, requiresFactory: true },
     { name: 'Reports', path: activeFactory ? `/report/${activeFactory.id}` : '#', icon: FileText, requiresFactory: true },
   ];
+
 
   const handleNav = (item) => {
     if (item.requiresFactory && !activeFactory) {
