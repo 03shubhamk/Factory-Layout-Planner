@@ -7,13 +7,22 @@ A modern, web-based industrial **Factory Layout Planner & MES Optimizer** for de
 ![Vite](https://img.shields.io/badge/bundler-Vite_5-purple)
 ![Express](https://img.shields.io/badge/backend-Express_4-green)
 ![Prisma](https://img.shields.io/badge/ORM-Prisma_5-indigo)
+![Socket.io](https://img.shields.io/badge/realtime-Socket.io_4-black)
 
 ---
 
 ## 🌟 Key Features
 
+- **⚡ Live Industrial IoT & MES Command Center**:
+  - Real-time WebSocket telemetry streaming (Temperature °C, Vibration RMS mm/s, Spindle RPM, Power kW, Load %, Fleet OEE).
+  - Live MES Fleet Monitor dashboard (`/telemetry/:id`) with aggregate power demand and alarms log.
+  - Interactive Edge Anomaly Injector (Overheat, Bearing Failure, Spindle Stall, Power Surge) with live alarm propagation.
+  - Machine Telemetry Waveforms Drawer with Recharts area curves and thermal safety limits (75°C & 85°C).
+  - Direct MQTT / OPC-UA payload ingestion simulator.
+
 - **📐 Interactive Blueprint Canvas**:
   - Drag-and-drop machine node positioning ($0.5\text{m}$ grid snap).
+  - Real-time sensor chips and pulsing alarm halos on machine nodes.
   - Smooth pan (`cursor-grab` hand tool) & mouse wheel zoom (`Ctrl + Wheel`).
   - Bounded coordinate protection to prevent clipping.
 
@@ -42,8 +51,9 @@ A modern, web-based industrial **Factory Layout Planner & MES Optimizer** for de
 
 ## 🏗️ Architecture Stack
 
-- **Frontend**: React 18, Vite 5, TailwindCSS, Lucide Icons, Recharts, React Router v6.
-- **Backend**: Node.js, Express.js, Prisma ORM, SQLite database.
+- **Frontend**: React 18, Vite 5, TailwindCSS, Lucide Icons, Recharts, Socket.io-client, React Router v6.
+- **Backend**: Node.js, Express.js, Socket.io, Prisma ORM, SQLite database.
+
 
 ---
 
