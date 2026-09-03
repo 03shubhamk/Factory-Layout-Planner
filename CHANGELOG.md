@@ -2,7 +2,19 @@
 
 All notable changes to the **Factory Layout Planner & MES Optimizer** project are documented here.
 
+## [v1.3.0] - Real-Time Industrial IoT & Live MES Fleet Command Center
+
+### Added
+- **Real-Time IoT WebSocket Gateway**: Built-in `socket.io` server broadcasting live sensor metrics every 1.5s per active factory.
+- **Industrial Sensor Simulation Engine**: Realistic Brownian drift generating Temperature (°C), Vibration RMS (mm/s), Spindle RPM, Active Power (kW), Live Load %, Cycle Count, and Fleet OEE.
+- **Edge Fault / Anomaly Injector**: Interactive fault simulator supporting Overheat Spikes, Bearing Wear, Spindle Jams, and Power Surges with instant alarm propagation.
+- **Live MES Fleet Command Center (`/telemetry/:id`)**: Dedicated operational dashboard featuring fleet health gauges, total power meters, real-time alarms feed, and MQTT/OPC-UA payload ingestion simulator.
+- **Machine Telemetry Waveforms Drawer**: Slide-over HUD with live Recharts area charts, thermal safety reference lines (75°C warning, 85°C critical), and vibration harmonics.
+- **Live Canvas Sensor Chips & Alarm Halos**: Machine blueprint nodes now display live temperature chips and pulsing alarm halos on critical faults.
+- **REST Telemetry APIs**: Added `/api/factories/:id/telemetry/inject-anomaly`, `/api/factories/:id/telemetry/reset-anomaly`, and `/api/factories/:id/telemetry/publish`.
+
 ## [v1.2.0] - Live Simulation & Presets Release
+
 
 ### Added
 - **Live Flow Simulation Engine**: Animated SVG cargo particles (`📦`) traveling along flow lines.
