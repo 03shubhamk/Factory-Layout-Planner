@@ -1,0 +1,109 @@
+openapi: 3.0.3
+info:
+  title: Smart Factory Layout Planner API
+  version: 1.3.0
+  description: RESTful API for managing industrial plant layouts, equipment nodes, material connections, and live IoT telemetry.
+servers:
+  - url: http://localhost:5000/api
+    description: Local Development Server
+
+paths:
+  /layouts:
+    get:
+      summary: Retrieve all factory layouts
+      responses:
+        '200':
+          description: List of saved layouts
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Layout'
+    post:
+      summary: Create a new factory layout
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Layout'
+      responses:
+        '201':
+          description: Layout successfully created
+
+  /layouts/{id}:
+    get:
+      summary: Get layout details by ID
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Layout found
+        '404':
+          description: Layout not found
+    put:
+      summary: Update existing layout
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Layout'
+      responses:
+        '200':
+          description: Layout updated
+    delete:
+      summary: Delete layout by ID
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Layout deleted
+
+components:
+  schemas:
+    Layout:
+      type: object
+      required:
+        - name
+        - dimensions
+      properties:
+        _id:
+          type: string
+        name:
+          type: string
+        description:
+          type: string
+        dimensions:
+          type: object
+          properties:
+            width:
+              type: number
+            length:
+              type: number
+            unit:
+              type: string
+              enum: [m, ft]
+        machines:
+          type: array
+          items:
+            type: object
+        connections:
+          type: array
+          items:
+            type: object
