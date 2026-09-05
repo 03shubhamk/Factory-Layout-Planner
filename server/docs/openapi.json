@@ -1,0 +1,34 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "Smart Factory Layout Planner API",
+    "version": "1.3.0",
+    "description": "RESTful API for managing industrial plant layouts, equipment nodes, material connections, and live IoT telemetry."
+  },
+  "servers": [
+    {
+      "url": "http://localhost:5000/api",
+      "description": "Local Development Server"
+    }
+  ],
+  "paths": {
+    "/layouts": {
+      "get": {
+        "summary": "Retrieve all factory layouts",
+        "responses": {
+          "200": {
+            "description": "Array of layouts"
+          }
+        }
+      },
+      "post": {
+        "summary": "Create new layout",
+        "responses": {
+          "201": {
+            "description": "Created"
+          }
+        }
+      }
+    }
+  }
+}
