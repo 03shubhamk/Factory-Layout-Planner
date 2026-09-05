@@ -1,0 +1,13 @@
+node_modules
+client/node_modules
+.git
+.gitignore
+.github
+*.log
+.env
+.env.local
+coverage
+dist
+client/dist
+.DS_Store
+Thumbs.db
