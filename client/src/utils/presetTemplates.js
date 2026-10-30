@@ -1,62 +1,84 @@
+/**
+ * Industrial Preset Templates with Pre-Configured CAD Machine Coordinates
+ * 
+ * Provides production-ready facility layouts across key industrial domains.
+ * The Water Purification preset features a standard 9-workstation sequence
+ * following Tompkins et al. facilities planning layout principles.
+ */
+
 export const PRESET_TEMPLATES = [
   {
-    id: 'automotive',
-    name: 'Automotive Assembly Line',
-    icon: '🚗',
-    category: 'Automotive',
-    description: 'High-throughput chassis assembly, automated stamping, body welding, paint booth, and final quality inspection.',
-    defaultDimensions: { length: 80, width: 45, departmentCount: 5 },
+    id: 'water_purification',
+    name: 'Industrial Water Purification & Bottling Plant',
+    icon: '💧',
+    category: 'Beverage & Utility',
+    description: 'Turnkey industrial water treatment facility: Raw water intake, multi-media filter, 4-stage RO skid, UV/Ozone sterilization, rotary rinser-filler monoblock, laser coder, sleeve labeler, case bundler, and dispatch dock.',
+    defaultDimensions: { length: 75, width: 45, departmentCount: 5 },
     machines: [
-      { machineName: 'Sheet Stamping Press', machineType: 'Input', x: 6, y: 6, orientation: 0, status: 'Running', throughput: 180, health: 'Optimal', load: 75 },
-      { machineName: 'Robotic Welding Arm', machineType: 'Processing', x: 15, y: 10, orientation: 90, status: 'Running', throughput: 160, health: 'Optimal', load: 82 },
-      { machineName: 'Electro-Paint Booth', machineType: 'Processing', x: 24, y: 14, orientation: 0, status: 'Running', throughput: 140, health: 'Optimal', load: 68 },
-      { machineName: 'Chassis Fit Station', machineType: 'Assembly', x: 33, y: 18, orientation: 270, status: 'Running', throughput: 150, health: 'Optimal', load: 70 },
-      { machineName: 'End-of-Line Audit', machineType: 'Quality', x: 42, y: 22, orientation: 0, status: 'Running', throughput: 130, health: 'Optimal', load: 55 }
+      { machineName: 'Raw Water Intake Reservoir', machineType: 'Input', x: 6, y: 8, orientation: 0, status: 'Running', throughput: 500, health: 'Optimal', load: 85 },
+      { machineName: 'Multi-Media Sand & Carbon Filter', machineType: 'Processing', x: 16, y: 8, orientation: 0, status: 'Running', throughput: 450, health: 'Optimal', load: 80 },
+      { machineName: '4-Stage Industrial RO Skid', machineType: 'Processing', x: 28, y: 8, orientation: 0, status: 'Running', throughput: 400, health: 'Optimal', load: 88 },
+      { machineName: 'UV & Ozone Sterilization Unit', machineType: 'Processing', x: 40, y: 8, orientation: 0, status: 'Running', throughput: 380, health: 'Optimal', load: 75 },
+      { machineName: 'Pure Water Polishing Tank', machineType: 'Storage', x: 52, y: 8, orientation: 90, status: 'Running', throughput: 400, health: 'Optimal', load: 70 },
+      { machineName: 'Rotary Rinser-Filler-Capper Monoblock', machineType: 'Assembly', x: 56, y: 22, orientation: 180, status: 'Running', throughput: 320, health: 'Optimal', load: 92 },
+      { machineName: 'Laser Coder & Cap Inspector', machineType: 'Quality', x: 42, y: 24, orientation: 180, status: 'Running', throughput: 300, health: 'Optimal', load: 65 },
+      { machineName: 'Continuous Shrink Sleeve Labeler', machineType: 'Processing', x: 30, y: 24, orientation: 180, status: 'Running', throughput: 280, health: 'Optimal', load: 72 },
+      { machineName: 'Case Bundler & Palletizer', machineType: 'Logistics', x: 16, y: 24, orientation: 180, status: 'Running', throughput: 260, health: 'Optimal', load: 78 },
+      { machineName: 'Finished Water Dispatch Dock', machineType: 'Storage', x: 6, y: 24, orientation: 180, status: 'Running', throughput: 240, health: 'Optimal', load: 60 }
     ]
   },
   {
-    id: 'battery',
-    name: 'EV Battery Gigafactory',
-    icon: '⚡',
-    category: 'Cleanroom',
-    description: 'Precision electrode coating, dry-room cell winding, electrolyte injection, aging chamber, and module assembly.',
-    defaultDimensions: { length: 100, width: 50, departmentCount: 6 },
+    id: 'automotive',
+    name: 'Automotive Powertrain & Assembly Line',
+    icon: '🚗',
+    category: 'Automotive',
+    description: 'High-throughput chassis stamping, automated robotic welding, cathodic electro-paint booth, chassis marriage, and end-of-line dyno inspection.',
+    defaultDimensions: { length: 80, width: 45, departmentCount: 5 },
     machines: [
-      { machineName: 'Slurry Coater Line', machineType: 'Input', x: 6, y: 6, orientation: 0, status: 'Running', throughput: 220, health: 'Optimal', load: 88 },
-      { machineName: 'Precision Cell Winder', machineType: 'Processing', x: 15, y: 10, orientation: 90, status: 'Running', throughput: 200, health: 'Optimal', load: 80 },
-      { machineName: 'Electrolyte Injector', machineType: 'Processing', x: 24, y: 14, orientation: 0, status: 'Running', throughput: 190, health: 'Optimal', load: 75 },
-      { machineName: 'Thermal Aging Chamber', machineType: 'Storage', x: 33, y: 18, orientation: 270, status: 'Running', throughput: 180, health: 'Optimal', load: 60 },
-      { machineName: 'Pack Assembly Station', machineType: 'Assembly', x: 42, y: 22, orientation: 0, status: 'Running', throughput: 160, health: 'Optimal', load: 65 }
+      { machineName: 'Sheet Stamping Press', machineType: 'Input', x: 6, y: 8, orientation: 0, status: 'Running', throughput: 180, health: 'Optimal', load: 75 },
+      { machineName: '5-Axis CNC Machining Center', machineType: 'Processing', x: 18, y: 8, orientation: 0, status: 'Running', throughput: 160, health: 'Optimal', load: 82 },
+      { machineName: 'Robotic Spot Welding Cell', machineType: 'Assembly', x: 32, y: 10, orientation: 90, status: 'Running', throughput: 160, health: 'Optimal', load: 80 },
+      { machineName: 'Electro-Paint Dip Booth', machineType: 'Processing', x: 46, y: 12, orientation: 0, status: 'Running', throughput: 140, health: 'Optimal', load: 68 },
+      { machineName: 'Chassis Marriage Station', machineType: 'Assembly', x: 60, y: 18, orientation: 180, status: 'Running', throughput: 150, health: 'Optimal', load: 70 },
+      { machineName: 'Laser CMM Geometry Scanner', machineType: 'Quality', x: 46, y: 26, orientation: 180, status: 'Running', throughput: 130, health: 'Optimal', load: 55 },
+      { machineName: 'End-of-Line Roller Dyno', machineType: 'Quality', x: 30, y: 26, orientation: 180, status: 'Running', throughput: 130, health: 'Optimal', load: 60 },
+      { machineName: 'Vehicle Dispatch Bay', machineType: 'Storage', x: 14, y: 26, orientation: 180, status: 'Running', throughput: 120, health: 'Optimal', load: 50 }
     ]
   },
   {
     id: 'smt',
-    name: 'Electronics SMT Line',
+    name: 'Electronics SMT Production Line',
     icon: '📱',
     category: 'High-Tech',
-    description: 'Surface Mount Technology line featuring solder paste printing, high-speed pick & place, reflow soldering oven, and AOI inspection.',
+    description: 'Surface Mount Technology line featuring bare PCB loading, precision solder paste printing, high-speed dual-gantry pick & place, reflow oven, and 3D AOI inspection.',
     defaultDimensions: { length: 60, width: 35, departmentCount: 4 },
     machines: [
-      { machineName: 'PCB Loader Unit', machineType: 'Input', x: 6, y: 6, orientation: 0, status: 'Running', throughput: 250, health: 'Optimal', load: 70 },
-      { machineName: 'Solder Paste Printer', machineType: 'Processing', x: 15, y: 10, orientation: 0, status: 'Running', throughput: 240, health: 'Optimal', load: 75 },
-      { machineName: 'Dual-Gantry Pick & Place', machineType: 'Assembly', x: 24, y: 14, orientation: 90, status: 'Running', throughput: 220, health: 'Optimal', load: 85 },
-      { machineName: 'Reflow Soldering Oven', machineType: 'Processing', x: 33, y: 18, orientation: 0, status: 'Running', throughput: 210, health: 'Optimal', load: 65 },
-      { machineName: '3D AOI Inspection', machineType: 'Quality', x: 42, y: 22, orientation: 270, status: 'Running', throughput: 230, health: 'Optimal', load: 50 }
+      { machineName: 'PCB Vacuum Loader', machineType: 'Input', x: 6, y: 8, orientation: 0, status: 'Running', throughput: 250, health: 'Optimal', load: 70 },
+      { machineName: 'Solder Paste Stencil Printer', machineType: 'Processing', x: 16, y: 8, orientation: 0, status: 'Running', throughput: 240, health: 'Optimal', load: 75 },
+      { machineName: 'Dual-Gantry Pick & Place', machineType: 'Assembly', x: 28, y: 10, orientation: 90, status: 'Running', throughput: 220, health: 'Optimal', load: 85 },
+      { machineName: '10-Zone Reflow Soldering Oven', machineType: 'Processing', x: 42, y: 12, orientation: 0, status: 'Running', throughput: 210, health: 'Optimal', load: 65 },
+      { machineName: '3D AOI Optical Inspection', machineType: 'Quality', x: 48, y: 22, orientation: 180, status: 'Running', throughput: 230, health: 'Optimal', load: 50 },
+      { machineName: 'Selective Wave Soldering', machineType: 'Processing', x: 34, y: 22, orientation: 180, status: 'Running', throughput: 200, health: 'Optimal', load: 60 },
+      { machineName: 'Functional ICT Tester', machineType: 'Quality', x: 20, y: 22, orientation: 180, status: 'Running', throughput: 220, health: 'Optimal', load: 55 },
+      { machineName: 'ESD Taping & Boxing Dock', machineType: 'Logistics', x: 8, y: 22, orientation: 180, status: 'Running', throughput: 200, health: 'Optimal', load: 50 }
     ]
   },
   {
     id: 'pharma',
-    name: 'Pharma Packaging Line',
+    name: 'cGMP Pharmaceutical Cleanroom',
     icon: '💊',
     category: 'Pharma',
-    description: 'cGMP sterile bottle filling, blister pack seal, cartoning machine, checkweigher, and automated palletizer.',
+    description: 'cGMP sterile formulation, API dispensing booth, high-shear granulator, rotary tablet press, blister packaging, serialization verifier, and carton bundler.',
     defaultDimensions: { length: 70, width: 40, departmentCount: 5 },
     machines: [
-      { machineName: 'Sterile Bottle Filler', machineType: 'Input', x: 6, y: 6, orientation: 0, status: 'Running', throughput: 300, health: 'Optimal', load: 90 },
-      { machineName: 'Thermoform Blister Sealer', machineType: 'Processing', x: 15, y: 10, orientation: 90, status: 'Running', throughput: 280, health: 'Optimal', load: 82 },
-      { machineName: 'Continuous Cartoner', machineType: 'Logistics', x: 24, y: 14, orientation: 0, status: 'Running', throughput: 270, health: 'Optimal', load: 78 },
-      { machineName: 'Checkweigher & Laser Coder', machineType: 'Quality', x: 33, y: 18, orientation: 270, status: 'Running', throughput: 260, health: 'Optimal', load: 60 },
-      { machineName: 'Robotic Palletizer', machineType: 'Logistics', x: 42, y: 22, orientation: 0, status: 'Running', throughput: 250, health: 'Optimal', load: 50 }
+      { machineName: 'Laminar API Dispensing Booth', machineType: 'Input', x: 6, y: 8, orientation: 0, status: 'Running', throughput: 300, health: 'Optimal', load: 90 },
+      { machineName: 'High-Shear Mixer & Fluid Bed', machineType: 'Processing', x: 18, y: 8, orientation: 0, status: 'Running', throughput: 280, health: 'Optimal', load: 82 },
+      { machineName: 'Rotary Tablet Press', machineType: 'Processing', x: 30, y: 10, orientation: 0, status: 'Running', throughput: 290, health: 'Optimal', load: 85 },
+      { machineName: 'Perforated Pan Film Coater', machineType: 'Processing', x: 44, y: 12, orientation: 0, status: 'Running', throughput: 260, health: 'Optimal', load: 78 },
+      { machineName: 'Thermoform Blister Machine', machineType: 'Processing', x: 54, y: 22, orientation: 180, status: 'Running', throughput: 280, health: 'Optimal', load: 80 },
+      { machineName: 'Checkweigher & Serialization Hub', machineType: 'Quality', x: 40, y: 22, orientation: 180, status: 'Running', throughput: 260, health: 'Optimal', load: 60 },
+      { machineName: 'Continuous Motion Cartoner', machineType: 'Logistics', x: 26, y: 22, orientation: 180, status: 'Running', throughput: 250, health: 'Optimal', load: 65 },
+      { machineName: 'Clean Staging Airlock Dock', machineType: 'Storage', x: 10, y: 22, orientation: 180, status: 'Running', throughput: 200, health: 'Optimal', load: 50 }
     ]
   }
 ];
