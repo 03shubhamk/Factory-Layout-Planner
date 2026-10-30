@@ -1,4 +1,4 @@
-const BASE_URL = '/api';
+const BASE_URL = '/api/v1';
 
 async function handleResponse(response) {
   if (!response.ok) {
@@ -32,6 +32,15 @@ export const api = {
   async deleteFactory(id) {
     const response = await fetch(`${BASE_URL}/factories/${id}`, {
       method: 'DELETE',
+    });
+    return handleResponse(response);
+  },
+
+  async updateFactory(id, data) {
+    const response = await fetch(`${BASE_URL}/factories/${id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
     });
     return handleResponse(response);
   },
