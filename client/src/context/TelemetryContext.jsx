@@ -4,7 +4,8 @@ import {
   subscribeToFactoryTelemetry, 
   unsubscribeFromFactoryTelemetry, 
   triggerMachineAnomaly, 
-  clearMachineAnomaly 
+  clearMachineAnomaly,
+  onReconnect
 } from '../services/socket';
 import { useFactory } from './FactoryContext';
 import { toast } from 'react-toastify';
@@ -22,6 +23,7 @@ export const useTelemetry = () => {
 export const TelemetryProvider = ({ children }) => {
   const { activeFactory } = useFactory();
   const [isConnected, setIsConnected] = useState(false);
+  const [isReconnecting, setIsReconnecting] = useState(false);
   const [packetCount, setPacketCount] = useState(0);
   const [lastPacketTime, setLastPacketTime] = useState(null);
 
@@ -51,13 +53,34 @@ export const TelemetryProvider = ({ children }) => {
 
     const handleConnect = () => {
       setIsConnected(true);
+      setIsReconnecting(false);
       if (activeFactory?.id) {
         subscribeToFactoryTelemetry(activeFactory.id);
       }
     };
 
-    const handleDisconnect = () => {
+    const handleDisconnect = (reason) => {
       setIsConnected(false);
+      if (reason === 'io client disconnect') {
+        // Manual disconnect, don't show reconnecting
+      } else {
+        setIsReconnecting(true);
+      }
+    };
+
+    const handleReconnect = (attemptNumber) => {
+      setIsReconnecting(false);
+      setIsConnected(true);
+      if (activeFactory?.id) {
+        subscribeToFactoryTelemetry(activeFactory.id);
+      }
+      if (attemptNumber > 1) {
+        toast.success('🔌 Reconnected to IoT Gateway');
+      }
+    };
+
+    const handleReconnectAttempt = () => {
+      setIsReconnecting(true);
     };
 
     const handleTelemetryUpdate = (payload) => {
@@ -132,6 +155,8 @@ export const TelemetryProvider = ({ children }) => {
 
     socket.on('connect', handleConnect);
     socket.on('disconnect', handleDisconnect);
+    socket.on('reconnect', handleReconnect);
+    socket.on('reconnect_attempt', handleReconnectAttempt);
     socket.on('telemetry_update', handleTelemetryUpdate);
     socket.on('anomaly_injected', handleAnomalyInjected);
     socket.on('anomaly_reset', handleAnomalyReset);
@@ -144,12 +169,21 @@ export const TelemetryProvider = ({ children }) => {
       }
     }
 
+    // Register for reconnect callbacks
+    const unsubscribeReconnect = onReconnect((connected) => {
+      setIsConnected(connected);
+      setIsReconnecting(!connected);
+    });
+
     return () => {
       socket.off('connect', handleConnect);
       socket.off('disconnect', handleDisconnect);
+      socket.off('reconnect', handleReconnect);
+      socket.off('reconnect_attempt', handleReconnectAttempt);
       socket.off('telemetry_update', handleTelemetryUpdate);
       socket.off('anomaly_injected', handleAnomalyInjected);
       socket.off('anomaly_reset', handleAnomalyReset);
+      unsubscribeReconnect();
     };
   }, [activeFactory?.id]);
 
@@ -193,6 +227,7 @@ export const TelemetryProvider = ({ children }) => {
   return (
     <TelemetryContext.Provider value={{
       isConnected,
+      isReconnecting,
       packetCount,
       lastPacketTime,
       telemetryByMachine,
