@@ -2,14 +2,11 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useFactory } from '../context/FactoryContext';
 import { 
-  Plus, 
   Trash2, 
   RotateCw, 
   ZoomIn, 
   ZoomOut, 
   Maximize2, 
-  HelpCircle, 
-  Check, 
   Layers,
   Wrench,
   Activity,
@@ -18,15 +15,42 @@ import {
   Pause,
   Flame,
   Zap,
-  FastForward,
   Sparkles,
   ChevronDown,
-  Radio
+  Radio,
+  Shield,
+  Sun,
+  Moon,
+  Move,
+  Box,
+  Cpu,
+  ShieldCheck,
+  Package,
+  Boxes,
+  Database,
+  Crosshair
 } from 'lucide-react';
 import PRESET_TEMPLATES from '../utils/presetTemplates';
 import { useTelemetry } from '../context/TelemetryContext';
 import LiveTelemetryBadge from '../components/LiveTelemetryBadge';
 import MachineTelemetryDrawer from '../components/MachineTelemetryDrawer';
+import MachineSchematic from '../components/MachineSchematic';
+import { TopRuler, LeftRuler } from '../components/CADRuler';
+import FactoryMinimap from '../components/FactoryMinimap';
+import { getOrthogonalPath } from '../utils/flowRouting';
+
+// Proportional CAD footprints per machine classification (in meters)
+const getMachineDimensions = (type) => {
+  switch (type) {
+    case 'Input': return { w: 3.4, h: 2.4 };
+    case 'Processing': return { w: 3.8, h: 2.8 };
+    case 'Assembly': return { w: 3.6, h: 3.0 };
+    case 'Quality': return { w: 3.2, h: 2.4 };
+    case 'Logistics': return { w: 4.4, h: 2.4 };
+    case 'Storage': return { w: 4.2, h: 2.6 };
+    default: return { w: 3.4, h: 2.4 };
+  }
+};
 
 export default function LayoutDesigner() {
   const { id } = useParams();
@@ -42,31 +66,43 @@ export default function LayoutDesigner() {
     saveFlow 
   } = useFactory();
 
-  const { telemetryByMachine, isConnected } = useTelemetry();
+  const { telemetryByMachine } = useTelemetry();
 
   const [selectedMachineId, setSelectedMachineId] = useState(null);
   const [inspectingMachine, setInspectingMachine] = useState(null);
-  const [zoomLevel, setZoomLevel] = useState(1); // Scale multiplier
+  const [zoomLevel, setZoomLevel] = useState(1);
   const [snapToGrid, setSnapToGrid] = useState(true);
+  
+  // High-Tech Canvas Customizations
+  const [canvasTheme, setCanvasTheme] = useState('dark'); // 'dark' (Digital Twin) | 'light' (CAD Blueprint)
+  const [showSafetyZones, setShowSafetyZones] = useState(true);
+  const [showRulers, setShowRulers] = useState(true);
+  const [showMinimap, setShowMinimap] = useState(true);
+  const [activeTool, setActiveTool] = useState('select'); // 'select' | 'pan'
   
   // Interactive Simulation & Heatmap States
   const [isSimulating, setIsSimulating] = useState(true);
-  const [simSpeed, setSimSpeed] = useState(1); // 1, 2, 4
+  const [simSpeed, setSimSpeed] = useState(1);
   const [showHeatmap, setShowHeatmap] = useState(false);
   const [showPresetMenu, setShowPresetMenu] = useState(false);
 
-
-  // Track dragging & panning state
+  // Mouse & Panning State
+  const [cursorPos, setCursorPos] = useState({ x: null, y: null });
   const [draggingMachineId, setDraggingMachineId] = useState(null);
   const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
   const gridContainerRef = useRef(null);
   const canvasViewportRef = useRef(null);
   
-  // Canvas Viewport Panning States
   const [isPanningCanvas, setIsPanningCanvas] = useState(false);
   const [panStart, setPanStart] = useState({ x: 0, y: 0, scrollLeft: 0, scrollTop: 0 });
 
-  // Load Preset Industry Template Handler with proportional grid scaling
+  // Load details on mount
+  useEffect(() => {
+    if (id) {
+      loadFactoryDetails(id);
+    }
+  }, [id, loadFactoryDetails]);
+
   const handleLoadPresetTemplate = async (template) => {
     if (!activeFactory) return;
     setShowPresetMenu(false);
@@ -74,8 +110,6 @@ export default function LayoutDesigner() {
     if (machines.length > 0) {
       const confirmClear = window.confirm(`Loading "${template.name}" will clear all existing placed nodes. Proceed?`);
       if (!confirmClear) return;
-      
-      // Delete existing machines sequentially
       for (const m of machines) {
         await deleteMachine(m.id);
       }
@@ -86,8 +120,8 @@ export default function LayoutDesigner() {
 
     const createdIds = [];
     for (const mDef of template.machines) {
-      const scaledX = Math.round(Math.max(2, Math.min(activeFactory.length - 4, mDef.x * scaleX + 2)) * 2) / 2;
-      const scaledY = Math.round(Math.max(2, Math.min(activeFactory.width - 4, mDef.y * scaleY + 2)) * 2) / 2;
+      const scaledX = Math.round(Math.max(2, Math.min(activeFactory.length - 5, mDef.x * scaleX + 2)) * 2) / 2;
+      const scaledY = Math.round(Math.max(2, Math.min(activeFactory.width - 5, mDef.y * scaleY + 2)) * 2) / 2;
 
       const newM = await addMachine({
         machineName: mDef.machineName,
@@ -110,44 +144,34 @@ export default function LayoutDesigner() {
     }
   };
 
-  // Load details on mount
-  useEffect(() => {
-    if (id) {
-      loadFactoryDetails(id);
-    }
-  }, [id]);
-
-  // Selected Machine object helper
   const selectedMachine = machines.find(m => m.id === selectedMachineId);
 
-  // List of machine library templates
+  // Machine Library with Vector Icons
   const machineTemplates = [
-    { name: 'Raw Material', type: 'Input', color: '#3B82F6', icon: '📦' },
-    { name: 'Cutting Station', type: 'Processing', color: '#EF4444', icon: '✂️' },
-    { name: 'Drilling Unit', type: 'Processing', color: '#F59E0B', icon: '⚙️' },
-    { name: 'Assembly Line', type: 'Assembly', color: '#10B981', icon: '🤝' },
-    { name: 'Quality Check', type: 'Quality', color: '#8B5CF6', icon: '🔍' },
-    { name: 'Packaging', type: 'Logistics', color: '#EC4899', icon: '🗳️' },
-    { name: 'Warehouse', type: 'Logistics', color: '#64748B', icon: '🏢' },
-    { name: 'Storage Area', type: 'Storage', color: '#06B6D4', icon: '🗄️' },
+    { name: 'Raw Material Dock', type: 'Input', category: 'Production', icon: Box, w: 3.4, h: 2.4 },
+    { name: 'Precision CNC Mill', type: 'Processing', category: 'Production', icon: Cpu, w: 3.8, h: 2.8 },
+    { name: 'Drilling & Boring Unit', type: 'Processing', category: 'Production', icon: Wrench, w: 3.8, h: 2.8 },
+    { name: 'Robotic Welding Cell', type: 'Assembly', category: 'Production', icon: Zap, w: 3.6, h: 3.0 },
+    { name: 'Manual Assembly Bench', type: 'Assembly', category: 'Production', icon: Layers, w: 3.6, h: 2.6 },
+    { name: 'Optical CMM Inspection', type: 'Quality', category: 'Logistics & Storage', icon: ShieldCheck, w: 3.2, h: 2.4 },
+    { name: 'Automated Packaging', type: 'Logistics', category: 'Logistics & Storage', icon: Package, w: 4.4, h: 2.4 },
+    { name: 'High-Bay ASRS Racks', type: 'Storage', category: 'Logistics & Storage', icon: Boxes, w: 4.2, h: 2.6 },
+    { name: 'Buffer Staging Zone', type: 'Storage', category: 'Logistics & Storage', icon: Database, w: 4.0, h: 2.6 }
   ];
 
-  // Add machine to grid from template
   const handleAddTemplate = async (template) => {
     if (!activeFactory) return;
-    
-    // Spawn machine near center of grid
     const spawnX = Math.round(activeFactory.length / 2);
     const spawnY = Math.round(activeFactory.width / 2);
 
     const newMachine = await addMachine({
-      machineName: `${template.name} ${machines.filter(m => m.machineName.startsWith(template.name)).length + 1}`,
+      machineName: `${template.name.split(' ')[0]} ${machines.filter(m => m.machineName.startsWith(template.name.split(' ')[0])).length + 1}`,
       machineType: template.type,
       x: spawnX,
       y: spawnY,
       orientation: 0,
       status: 'Idle',
-      throughput: template.type === 'Processing' ? 142 : 100,
+      throughput: template.type === 'Processing' ? 140 : 100,
       health: 'Optimal',
       load: 50
     });
@@ -157,7 +181,6 @@ export default function LayoutDesigner() {
     }
   };
 
-  // Delete machine
   const handleDeleteSelected = async () => {
     if (selectedMachineId) {
       await deleteMachine(selectedMachineId);
@@ -168,13 +191,12 @@ export default function LayoutDesigner() {
   // Dragging event handlers
   const handleGridMouseDown = (e, mach) => {
     e.stopPropagation();
+    if (activeTool === 'pan') return;
+
     setSelectedMachineId(mach.id);
     setDraggingMachineId(mach.id);
     
-    // Calculate mouse position relative to machine top-left in meters
     const gridRect = gridContainerRef.current.getBoundingClientRect();
-    const meterScale = (gridRect.width / activeFactory.length) * zoomLevel;
-    
     const clickXMeters = (e.clientX - gridRect.left) / (gridRect.width / activeFactory.length);
     const clickYMeters = (e.clientY - gridRect.top) / (gridRect.height / activeFactory.width);
 
@@ -185,30 +207,35 @@ export default function LayoutDesigner() {
   };
 
   const handleGridMouseMove = (e) => {
-    if (!draggingMachineId || !activeFactory) return;
+    if (!gridContainerRef.current || !activeFactory) return;
 
     const gridRect = gridContainerRef.current.getBoundingClientRect();
-    
-    // Total physical size mapped to pixels
     const pxPerMeterX = gridRect.width / activeFactory.length;
     const pxPerMeterY = gridRect.height / activeFactory.width;
 
-    // Mouse coordinates in meters
-    const mouseXMeters = (e.clientX - gridRect.left) / pxPerMeterX;
-    const mouseYMeters = (e.clientY - gridRect.top) / pxPerMeterY;
+    const mouseXMeters = Math.max(0, Math.min(activeFactory.length, (e.clientX - gridRect.left) / pxPerMeterX));
+    const mouseYMeters = Math.max(0, Math.min(activeFactory.width, (e.clientY - gridRect.top) / pxPerMeterY));
+
+    setCursorPos({
+      x: Math.round(mouseXMeters * 10) / 10,
+      y: Math.round(mouseYMeters * 10) / 10
+    });
+
+    if (!draggingMachineId) return;
 
     let newX = mouseXMeters - dragOffset.x;
     let newY = mouseYMeters - dragOffset.y;
 
-    // Snap to 1m or 0.5m grid
     if (snapToGrid) {
-      newX = Math.round(newX * 2) / 2; // 0.5m snap
+      newX = Math.round(newX * 2) / 2;
       newY = Math.round(newY * 2) / 2;
     }
 
-    // Clamp coordinates to factory boundaries (offsetting for machine visual width of 3mx3m)
-    newX = Math.max(1, Math.min(activeFactory.length - 2, newX));
-    newY = Math.max(1, Math.min(activeFactory.width - 2, newY));
+    const draggingM = machines.find(m => m.id === draggingMachineId);
+    const { w, h } = getMachineDimensions(draggingM?.machineType);
+
+    newX = Math.max(0.5, Math.min(activeFactory.length - w - 0.5, newX));
+    newY = Math.max(0.5, Math.min(activeFactory.width - h - 0.5, newY));
 
     updateMachine(draggingMachineId, { x: newX, y: newY });
   };
@@ -219,7 +246,7 @@ export default function LayoutDesigner() {
 
   // Canvas Panning Handlers
   const handleCanvasMouseDown = (e) => {
-    if (e.target === gridContainerRef.current || e.target.tagName === 'svg' || e.target.classList.contains('blueprint-grid')) {
+    if (activeTool === 'pan' || e.target === gridContainerRef.current || e.target.tagName === 'svg' || e.target.classList.contains('blueprint-grid-canvas')) {
       setIsPanningCanvas(true);
       if (canvasViewportRef.current) {
         setPanStart({
@@ -248,12 +275,11 @@ export default function LayoutDesigner() {
     handleGridMouseUp();
   };
 
-  // Zoom options
   const handleZoom = (direction) => {
-    if (direction === 'in') setZoomLevel(prev => Math.min(2.5, prev + 0.1));
-    if (direction === 'out') setZoomLevel(prev => Math.max(0.4, prev - 0.1));
+    if (direction === 'in') setZoomLevel(prev => Math.min(2.5, prev + 0.15));
+    if (direction === 'out') setZoomLevel(prev => Math.max(0.4, prev - 0.15));
     if (direction === 'reset') {
-      setZoomLevel(0.85);
+      setZoomLevel(1);
       if (canvasViewportRef.current) {
         canvasViewportRef.current.scrollLeft = 0;
         canvasViewportRef.current.scrollTop = 0;
@@ -261,7 +287,6 @@ export default function LayoutDesigner() {
     }
   };
 
-  // Reset all layout machines
   const handleResetLayout = () => {
     if (window.confirm('Are you sure you want to clear this factory layout? All placed machines will be deleted.')) {
       machines.forEach(async (m) => {
@@ -271,12 +296,9 @@ export default function LayoutDesigner() {
     }
   };
 
-  // Save changes & Calculate Layout (Navigates to flow page first to define flow if empty, else analysis)
   const handleCalculateLayout = async () => {
     if (!activeFactory) return;
-    
     if (flow.length === 0 && machines.length > 0) {
-      // Prompt defining flow path
       navigate(`/flow/${activeFactory.id}`);
     } else {
       navigate(`/analysis/${activeFactory.id}`);
@@ -285,250 +307,247 @@ export default function LayoutDesigner() {
 
   if (!activeFactory) {
     return (
-      <div className="flex-1 flex items-center justify-center bg-slate-50">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+      <div className="flex-1 flex items-center justify-center bg-slate-900 text-slate-300 font-mono">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-cyan-400"></div>
       </div>
     );
   }
 
-  // Grid background style based on zoom and physical factory dimensions
-  const baseScale = Math.max(14, Math.min(22, 900 / (activeFactory?.length || 50)));
-  const gridWidthPx = Math.max(500, (activeFactory?.length || 50) * baseScale * zoomLevel);
+  // Calculate pixel bounds calibrated to physical meters
+  const baseScale = Math.max(16, Math.min(26, 1000 / (activeFactory?.length || 50)));
+  const gridWidthPx = Math.max(600, (activeFactory?.length || 50) * baseScale * zoomLevel);
+  const gridHeightPx = (gridWidthPx / activeFactory.length) * activeFactory.width;
 
-  const gridStyle = {
-    width: `${gridWidthPx}px`,
-    aspectRatio: `${activeFactory.length} / ${activeFactory.width}`,
-    position: 'relative',
-    flexShrink: 0
+  const getMachX = (m) => {
+    const { w } = getMachineDimensions(m.machineType);
+    return Math.max(0.5, Math.min(activeFactory.length - w - 0.5, m.x));
+  };
+  const getMachY = (m) => {
+    const { h } = getMachineDimensions(m.machineType);
+    return Math.max(0.5, Math.min(activeFactory.width - h - 0.5, m.y));
   };
 
-  // Bounding Helpers: Ensures machine nodes stay 100% inside the visible blueprint grid
-  const getMachX = (m) => Math.max(1, Math.min(activeFactory.length - 2.5, m.x));
-  const getMachY = (m) => Math.max(1, Math.min(activeFactory.width - 2.2, m.y));
+  const isDark = canvasTheme === 'dark';
 
   return (
-    <div className="flex-1 flex flex-col h-screen overflow-hidden bg-slate-100">
-      {/* Designer Content Body */}
+    <div className={`flex-1 flex flex-col h-screen overflow-hidden ${isDark ? 'bg-slate-950 text-slate-100' : 'bg-slate-100 text-slate-800'}`}>
+      
+      {/* Top Application Toolbar */}
+      <div className={`h-14 border-b flex items-center justify-between px-4 z-20 shrink-0 shadow-sm gap-2 select-none ${
+        isDark ? 'bg-slate-900/95 border-slate-800' : 'bg-white border-slate-200'
+      }`}>
+        {/* Left: Project title & CAD info */}
+        <div className="flex items-center gap-2 shrink-0">
+          <div className="flex items-center gap-1.5 px-2.5 py-1 rounded bg-cyan-950/60 border border-cyan-800/80 text-cyan-400 text-xs font-mono font-bold">
+            <Crosshair className="w-3.5 h-3.5" />
+            <span>GRID {activeFactory.length}×{activeFactory.width}m</span>
+          </div>
+
+          <button 
+            onClick={() => setSnapToGrid(!snapToGrid)}
+            className={`h-8 px-2.5 rounded text-xs font-mono font-semibold border transition-all flex items-center shrink-0 ${
+              snapToGrid 
+                ? 'bg-cyan-500/20 text-cyan-300 border-cyan-500/50' 
+                : isDark ? 'bg-slate-800 text-slate-400 border-slate-700' : 'bg-slate-100 text-slate-500 border-slate-300'
+            }`}
+          >
+            SNAP: {snapToGrid ? '0.5m' : 'OFF'}
+          </button>
+
+          {/* Industry Preset Selector */}
+          <div className="relative shrink-0">
+            <button
+              onClick={() => setShowPresetMenu(!showPresetMenu)}
+              className="h-8 px-3 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white rounded text-xs font-sans font-bold flex items-center gap-1.5 transition-all shadow-sm"
+            >
+              <Sparkles className="w-3.5 h-3.5" />
+              <span>Presets</span>
+              <ChevronDown className="w-3 h-3 opacity-80" />
+            </button>
+
+            {showPresetMenu && (
+              <div className={`absolute top-full left-0 mt-2 w-72 rounded-lg shadow-2xl border z-50 p-2 space-y-1 ${
+                isDark ? 'bg-slate-900 border-slate-700 text-slate-100' : 'bg-white border-slate-200 text-slate-800'
+              }`}>
+                <div className="text-[10px] font-bold uppercase tracking-wider px-2.5 py-1 text-slate-400">
+                  Pre-configured Layouts
+                </div>
+                {PRESET_TEMPLATES.map((tmpl) => (
+                  <button
+                    key={tmpl.id}
+                    onClick={() => handleLoadPresetTemplate(tmpl)}
+                    className={`w-full text-left p-2 rounded transition-all flex items-start gap-2.5 group ${
+                      isDark ? 'hover:bg-slate-800' : 'hover:bg-blue-50'
+                    }`}
+                  >
+                    <span className="text-xl">{tmpl.icon}</span>
+                    <div>
+                      <div className="text-xs font-bold flex items-center justify-between">
+                        <span className="group-hover:text-cyan-400">{tmpl.name}</span>
+                        <span className="text-[9px] px-1.5 py-0.5 bg-slate-800 text-slate-400 rounded font-mono">
+                          {tmpl.machines.length} Nodes
+                        </span>
+                      </div>
+                      <div className="text-[10px] text-slate-400 line-clamp-1 mt-0.5">
+                        {tmpl.description}
+                      </div>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+
+          <LiveTelemetryBadge minimal={true} />
+          <button
+            onClick={() => navigate(`/telemetry/${activeFactory.id}`)}
+            className="h-8 px-2.5 bg-slate-900 hover:bg-slate-800 text-slate-200 rounded text-xs font-mono font-bold flex items-center gap-1.5 transition-all border border-slate-700"
+            title="Open Live MES Command Center"
+          >
+            <Radio className="w-3.5 h-3.5 text-emerald-400 animate-pulse" />
+            <span className="hidden sm:inline">MES FLEET</span>
+          </button>
+        </div>
+
+        {/* Right Section: View Toggles & Simulation */}
+        <div className="flex items-center gap-2 shrink-0">
+          {/* Theme Switcher */}
+          <button
+            onClick={() => setCanvasTheme(isDark ? 'light' : 'dark')}
+            className={`h-8 px-2.5 rounded border text-xs font-mono font-semibold flex items-center gap-1.5 transition-all ${
+              isDark ? 'bg-slate-800 text-amber-300 border-slate-700 hover:bg-slate-700' : 'bg-slate-100 text-slate-700 border-slate-300 hover:bg-slate-200'
+            }`}
+            title="Toggle Digital Twin Dark / Clean CAD Blueprint"
+          >
+            {isDark ? <Sun className="w-3.5 h-3.5 text-amber-400" /> : <Moon className="w-3.5 h-3.5 text-indigo-600" />}
+            <span className="hidden md:inline">{isDark ? 'LIGHT' : 'DARK'}</span>
+          </button>
+
+          {/* Safety Buffer Zones Toggle */}
+          <button
+            onClick={() => setShowSafetyZones(!showSafetyZones)}
+            className={`h-8 px-2.5 rounded border text-xs font-mono font-semibold flex items-center gap-1.5 transition-all ${
+              showSafetyZones 
+                ? 'bg-amber-500/20 text-amber-400 border-amber-500/50' 
+                : isDark ? 'bg-slate-800 text-slate-400 border-slate-700' : 'bg-slate-100 text-slate-500 border-slate-300'
+            }`}
+            title="Toggle OSHA Safety Clearance Buffers"
+          >
+            <Shield className="w-3.5 h-3.5" />
+            <span className="hidden md:inline">OSHA BUFFER</span>
+          </button>
+
+          {/* Simulation Toggle */}
+          <button
+            onClick={() => setIsSimulating(!isSimulating)}
+            className={`h-8 px-3 rounded text-xs font-bold transition-all flex items-center gap-1.5 shadow-sm ${
+              isSimulating 
+                ? 'bg-emerald-600 text-white hover:bg-emerald-500' 
+                : isDark ? 'bg-slate-800 text-slate-300 border border-slate-700' : 'bg-slate-100 text-slate-700 border border-slate-300'
+            }`}
+          >
+            {isSimulating ? <Pause className="w-3.5 h-3.5 fill-current" /> : <Play className="w-3.5 h-3.5 fill-current" />}
+            <span>{isSimulating ? 'SIMULATING' : 'PAUSED'}</span>
+          </button>
+
+          {/* Speed Selector */}
+          <div className={`h-8 flex items-center p-0.5 rounded border ${isDark ? 'bg-slate-800 border-slate-700' : 'bg-slate-100 border-slate-300'}`}>
+            {[1, 2, 4].map(s => (
+              <button
+                key={s}
+                onClick={() => setSimSpeed(s)}
+                className={`h-7 px-2 text-[10px] font-mono font-bold rounded transition-all ${
+                  simSpeed === s 
+                    ? isDark ? 'bg-cyan-500 text-slate-950 shadow-sm' : 'bg-white text-slate-900 shadow-sm'
+                    : isDark ? 'text-slate-400 hover:text-slate-200' : 'text-slate-500 hover:text-slate-800'
+                }`}
+              >
+                {s}x
+              </button>
+            ))}
+          </div>
+
+          {/* Heatmap Toggle */}
+          <button
+            onClick={() => setShowHeatmap(!showHeatmap)}
+            className={`h-8 px-2.5 rounded border text-xs font-bold transition-all flex items-center gap-1.5 ${
+              showHeatmap 
+                ? 'bg-rose-500 text-white border-rose-600 shadow-sm' 
+                : isDark ? 'bg-slate-800 text-slate-400 border-slate-700' : 'bg-white text-slate-600 border-slate-300'
+            }`}
+          >
+            <Flame className={`w-3.5 h-3.5 ${showHeatmap ? 'fill-current' : ''}`} />
+            <span className="hidden md:inline">HEATMAP</span>
+          </button>
+        </div>
+      </div>
+
+      {/* Main Designer Studio Layout */}
       <div className="flex-1 flex overflow-hidden">
         
-        {/* Left Side: Machine Library */}
-        <aside className="w-64 bg-white border-r border-slate-200 flex flex-col h-full shrink-0 shadow-sm">
-          <div className="p-4 border-b border-slate-200">
-            <h2 className="font-bold text-slate-800 text-sm">Machine Library</h2>
-            <p className="text-[10px] text-slate-400 mt-0.5">Click templates to insert onto the grid.</p>
+        {/* Left Side: Industrial Component Library */}
+        <aside className={`w-64 border-r flex flex-col h-full shrink-0 shadow-sm select-none ${
+          isDark ? 'bg-slate-900/90 border-slate-800' : 'bg-white border-slate-200'
+        }`}>
+          <div className={`p-3.5 border-b ${isDark ? 'border-slate-800' : 'border-slate-200'}`}>
+            <h2 className="font-bold text-xs uppercase tracking-wider text-cyan-400">Component Library</h2>
+            <p className="text-[10px] text-slate-400 mt-0.5">Click industrial units to insert onto CAD canvas.</p>
           </div>
           
-          <div className="flex-1 overflow-y-auto p-4 space-y-6">
-            {/* Library list grouped by categories */}
-            <div className="space-y-4">
-              <div>
-                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-2">Production</span>
-                <div className="grid grid-cols-1 gap-2">
-                  {machineTemplates.filter(t => t.type === 'Input' || t.type === 'Processing' || t.type === 'Assembly').map((template) => (
-                    <button
-                      key={template.name}
-                      onClick={() => handleAddTemplate(template)}
-                      className="flex items-center gap-3 p-2.5 rounded-lg border border-slate-100 hover:border-primary/30 hover:bg-blue-50/20 text-left transition-all text-xs font-semibold text-slate-700"
-                    >
-                      <span className="text-base">{template.icon}</span>
-                      <span>{template.name}</span>
-                    </button>
-                  ))}
+          <div className="flex-1 overflow-y-auto p-3 space-y-4">
+            {['Production', 'Logistics & Storage'].map(cat => (
+              <div key={cat} className="space-y-2">
+                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
+                  {cat}
+                </span>
+                <div className="space-y-1.5">
+                  {machineTemplates.filter(t => t.category === cat).map((tmpl) => {
+                    const IconComponent = tmpl.icon;
+                    return (
+                      <button
+                        key={tmpl.name}
+                        onClick={() => handleAddTemplate(tmpl)}
+                        className={`w-full flex items-center justify-between p-2.5 rounded border transition-all text-left text-xs font-semibold ${
+                          isDark 
+                            ? 'bg-slate-800/80 border-slate-700/80 hover:border-cyan-500/80 hover:bg-slate-800 text-slate-200' 
+                            : 'bg-slate-50 border-slate-200 hover:border-blue-500 hover:bg-blue-50/50 text-slate-700'
+                        }`}
+                      >
+                        <div className="flex items-center gap-2.5">
+                          <div className={`p-1.5 rounded ${isDark ? 'bg-slate-900 text-cyan-400' : 'bg-white text-blue-600 shadow-2xs'}`}>
+                            <IconComponent className="w-4 h-4" />
+                          </div>
+                          <div>
+                            <div className="text-xs font-bold leading-tight">{tmpl.name}</div>
+                            <div className="text-[9px] font-mono text-slate-400">{tmpl.type}</div>
+                          </div>
+                        </div>
+                        <span className="text-[9px] font-mono text-slate-400 bg-slate-950/40 px-1.5 py-0.5 rounded">
+                          {tmpl.w}×{tmpl.h}m
+                        </span>
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
-
-              <div>
-                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-2">Logistics & Storage</span>
-                <div className="grid grid-cols-1 gap-2">
-                  {machineTemplates.filter(t => t.type === 'Logistics' || t.type === 'Storage' || t.type === 'Quality').map((template) => (
-                    <button
-                      key={template.name}
-                      onClick={() => handleAddTemplate(template)}
-                      className="flex items-center gap-3 p-2.5 rounded-lg border border-slate-100 hover:border-primary/30 hover:bg-blue-50/20 text-left transition-all text-xs font-semibold text-slate-700"
-                    >
-                      <span className="text-base">{template.icon}</span>
-                      <span>{template.name}</span>
-                    </button>
-                  ))}
-                </div>
-              </div>
-            </div>
+            ))}
           </div>
         </aside>
 
-        {/* Center: Factory Floor Designer Grid */}
+        {/* Center: Interactive CAD Blueprint Canvas */}
         <main 
           className="flex-1 flex flex-col overflow-hidden relative"
           onMouseMove={handleCanvasMouseMove}
           onMouseUp={handleCanvasMouseUp}
           onMouseLeave={handleCanvasMouseUp}
         >
-          {/* Grid Header Toolbar */}
-          <div className="h-14 bg-white border-b border-slate-200 flex items-center justify-between px-4 z-10 shadow-sm shrink-0 overflow-x-auto overflow-y-hidden gap-2">
-            
-            {/* Left Section: Grid Info & Presets */}
-            <div className="flex items-center gap-2 shrink-0">
-              {/* Grid Size Badge */}
-              <span className="h-8 px-2.5 bg-slate-100/90 text-slate-700 font-mono border border-slate-200/80 rounded-lg text-xs font-semibold flex items-center shrink-0 whitespace-nowrap">
-                GRID: {activeFactory.length}×{activeFactory.width}m
-              </span>
-
-              {/* Snap Toggle Button */}
-              <button 
-                onClick={() => setSnapToGrid(!snapToGrid)}
-                className={`h-8 px-2.5 rounded-lg text-xs font-mono font-semibold border transition-all flex items-center shrink-0 whitespace-nowrap ${
-                  snapToGrid 
-                    ? 'bg-blue-50 text-blue-600 border-blue-200 shadow-2xs' 
-                    : 'bg-slate-50 text-slate-500 border-slate-200 hover:bg-slate-100'
-                }`}
-              >
-                SNAP: {snapToGrid ? 'ON' : 'OFF'}
-              </button>
-
-              {/* Preset Industry Layouts Dropdown */}
-              <div className="relative shrink-0">
-                <button
-                  onClick={() => setShowPresetMenu(!showPresetMenu)}
-                  className="h-8 px-3 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white rounded-lg text-xs font-sans font-bold flex items-center gap-1.5 transition-all shadow-sm whitespace-nowrap"
-                >
-                  <Sparkles className="w-3.5 h-3.5" />
-                  <span>Presets</span>
-                  <ChevronDown className="w-3 h-3 opacity-80" />
-                </button>
-
-                {showPresetMenu && (
-                  <div className="absolute top-full left-0 mt-2 w-64 bg-white rounded-lg shadow-xl border border-slate-200 z-50 p-2 space-y-1 font-sans">
-                    <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider px-2.5 py-1">
-                      Industry Presets
-                    </div>
-                    {PRESET_TEMPLATES.map((tmpl) => (
-                      <button
-                        key={tmpl.id}
-                        onClick={() => handleLoadPresetTemplate(tmpl)}
-                        className="w-full text-left p-2 rounded-md hover:bg-blue-50 transition-all flex items-start gap-2.5 group"
-                      >
-                        <span className="text-lg">{tmpl.icon}</span>
-                        <div>
-                          <div className="text-xs font-bold text-slate-800 group-hover:text-primary flex items-center justify-between">
-                            <span>{tmpl.name}</span>
-                            <span className="text-[9px] px-1.5 py-0.2 bg-slate-100 text-slate-500 rounded font-mono">
-                              {tmpl.machines.length} Nodes
-                            </span>
-                          </div>
-                          <div className="text-[10px] text-slate-400 line-clamp-1 mt-0.5">
-                            {tmpl.description}
-                          </div>
-                        </div>
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </div>
-
-              {/* Live IoT Gateway Status Badge & Fleet Link */}
-              <LiveTelemetryBadge minimal={true} />
-              <button
-                onClick={() => navigate(`/telemetry/${activeFactory.id}`)}
-                className="h-8 px-2.5 bg-slate-900 hover:bg-slate-800 text-slate-200 rounded-lg text-xs font-mono font-bold flex items-center gap-1.5 transition-all border border-slate-700 shrink-0 shadow-2xs"
-                title="Open Live MES Command Center"
-              >
-                <Radio className="w-3.5 h-3.5 text-emerald-400 animate-pulse" />
-                <span className="hidden sm:inline">FLEET MONITOR</span>
-              </button>
-            </div>
-
-            {/* Right Section: Simulation, Heatmap & Zoom */}
-            <div className="flex items-center gap-2 shrink-0">
-
-              {/* Play / Pause Toggle */}
-              <button
-                onClick={() => setIsSimulating(!isSimulating)}
-                className={`h-8 px-3 rounded-lg text-xs font-bold font-sans transition-all flex items-center gap-1.5 shadow-sm whitespace-nowrap ${
-                  isSimulating 
-                    ? 'bg-emerald-600 text-white hover:bg-emerald-700' 
-                    : 'bg-slate-100 text-slate-700 border border-slate-200 hover:bg-slate-200'
-                }`}
-              >
-                {isSimulating ? (
-                  <>
-                    <Pause className="w-3.5 h-3.5 fill-current" />
-                    <span>SIMULATING</span>
-                    <span className="w-2 h-2 rounded-full bg-white animate-pulse"></span>
-                  </>
-                ) : (
-                  <>
-                    <Play className="w-3.5 h-3.5 fill-current" />
-                    <span>START SIM</span>
-                  </>
-                )}
-              </button>
-
-              {/* Speed Buttons Segmented Pill */}
-              <div className="h-8 flex items-center bg-slate-100/90 p-0.5 rounded-lg border border-slate-200 shrink-0">
-                {[1, 2, 4].map(s => (
-                  <button
-                    key={s}
-                    onClick={() => setSimSpeed(s)}
-                    className={`h-7 px-2 text-[10px] font-mono font-bold rounded-md transition-all flex items-center justify-center ${
-                      simSpeed === s 
-                        ? 'bg-white text-slate-900 shadow-xs' 
-                        : 'text-slate-500 hover:text-slate-800'
-                    }`}
-                  >
-                    {s}x
-                  </button>
-                ))}
-              </div>
-
-              {/* Heatmap Toggle */}
-              <button
-                onClick={() => setShowHeatmap(!showHeatmap)}
-                className={`h-8 px-3 rounded-lg text-xs font-bold font-sans transition-all border flex items-center gap-1.5 whitespace-nowrap ${
-                  showHeatmap 
-                    ? 'bg-amber-500 text-white border-amber-600 shadow-sm' 
-                    : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
-                }`}
-              >
-                <Flame className={`w-3.5 h-3.5 ${showHeatmap ? 'fill-current' : ''}`} />
-                <span>HEATMAP</span>
-              </button>
-
-              <div className="h-4 w-px bg-slate-200 mx-0.5"></div>
-
-              {/* Zoom Buttons Group */}
-              <div className="flex items-center gap-1 shrink-0">
-                <button 
-                  onClick={() => handleZoom('in')}
-                  title="Zoom In"
-                  className="h-8 w-8 flex items-center justify-center hover:bg-slate-100 rounded-lg border border-slate-200 text-slate-600 bg-white transition-colors"
-                >
-                  <ZoomIn className="w-3.5 h-3.5" />
-                </button>
-                <button 
-                  onClick={() => handleZoom('out')}
-                  title="Zoom Out"
-                  className="h-8 w-8 flex items-center justify-center hover:bg-slate-100 rounded-lg border border-slate-200 text-slate-600 bg-white transition-colors"
-                >
-                  <ZoomOut className="w-3.5 h-3.5" />
-                </button>
-                <button 
-                  onClick={() => handleZoom('reset')}
-                  title="Fit Screen"
-                  className="h-8 w-8 flex items-center justify-center hover:bg-slate-100 rounded-lg border border-slate-200 text-slate-600 bg-white transition-colors"
-                >
-                  <Maximize2 className="w-3.5 h-3.5" />
-                </button>
-              </div>
-            </div>
-          </div>
-
-          {/* Grid Layout Canvas Viewport */}
+          {/* Scrollable Viewport with Integrated Rulers */}
           <div 
             ref={canvasViewportRef}
             onMouseDown={handleCanvasMouseDown}
-            className={`flex-1 overflow-auto p-8 flex bg-slate-200/70 select-none min-h-0 min-w-0 ${
-              isPanningCanvas ? 'cursor-grabbing' : 'cursor-grab'
-            }`}
+            className={`flex-1 overflow-auto p-6 flex select-none min-h-0 min-w-0 ${
+              isDark ? 'bg-slate-950' : 'bg-slate-200/60'
+            } ${isPanningCanvas || activeTool === 'pan' ? 'cursor-grabbing' : 'cursor-default'}`}
             onWheel={(e) => {
               if (e.ctrlKey || e.metaKey) {
                 e.preventDefault();
@@ -537,394 +556,520 @@ export default function LayoutDesigner() {
               }
             }}
           >
-            <div 
-              ref={gridContainerRef}
-              style={gridStyle}
-              className="blueprint-grid border-2 border-slate-300 shadow-md rounded-lg relative overflow-hidden m-auto"
-            >
-              {/* Grid visual coordinate coordinates labels */}
-              <div className="absolute top-1 left-2 text-[10px] font-mono text-slate-300 pointer-events-none">
-                0,0
-              </div>
-              <div className="absolute bottom-1 right-2 text-[10px] font-mono text-slate-300 pointer-events-none">
-                {activeFactory.length},{activeFactory.width}
-              </div>
+            {/* Unified Canvas + Rulers Block */}
+            <div className="flex flex-col shrink-0 m-auto">
+              {/* Top Metric Ruler Row */}
+              {showRulers && (
+                <div className="flex shrink-0">
+                  <div className={`w-6 h-5 shrink-0 border-b border-r ${
+                    isDark ? 'bg-slate-900 border-slate-800' : 'bg-slate-100 border-slate-200'
+                  }`} />
+                  <TopRuler 
+                    length={activeFactory.length} 
+                    widthPx={gridWidthPx} 
+                    isDark={isDark} 
+                    cursorMetersX={cursorPos.x} 
+                  />
+                </div>
+              )}
 
-              {/* Interactive Heatmap SVG Gradients Definition */}
-              <svg className="absolute inset-0 w-full h-full pointer-events-none z-10">
-                <defs>
-                  <radialGradient id="heat-high" cx="50%" cy="50%" r="50%">
-                    <stop offset="0%" stopColor="#EF4444" stopOpacity="0.6" />
-                    <stop offset="60%" stopColor="#F59E0B" stopOpacity="0.3" />
-                    <stop offset="100%" stopColor="#EF4444" stopOpacity="0" />
-                  </radialGradient>
-                  <radialGradient id="heat-medium" cx="50%" cy="50%" r="50%">
-                    <stop offset="0%" stopColor="#F59E0B" stopOpacity="0.5" />
-                    <stop offset="100%" stopColor="#F59E0B" stopOpacity="0" />
-                  </radialGradient>
-                  <radialGradient id="heat-low" cx="50%" cy="50%" r="50%">
-                    <stop offset="0%" stopColor="#10B981" stopOpacity="0.4" />
-                    <stop offset="100%" stopColor="#10B981" stopOpacity="0" />
-                  </radialGradient>
-                  <linearGradient id="flow-line-grad" x1="0%" y1="0%" x2="100%" y2="100%">
-                    <stop offset="0%" stopColor="#3B82F6" />
-                    <stop offset="50%" stopColor="#60A5FA" />
-                    <stop offset="100%" stopColor="#2563EB" />
-                  </linearGradient>
-                </defs>
+              {/* Middle Section: Left Ruler + Blueprint Floor Grid */}
+              <div className="flex shrink-0">
+                {showRulers && (
+                  <LeftRuler 
+                    width={activeFactory.width} 
+                    heightPx={gridHeightPx} 
+                    isDark={isDark} 
+                    cursorMetersY={cursorPos.y} 
+                  />
+                )}
 
-                {/* Render Heatmap Halos if Enabled */}
-                {showHeatmap && machines.map((m) => {
-                  const cxPct = ((getMachX(m) + 1.2) / activeFactory.length) * 100;
-                  const cyPct = ((getMachY(m) + 1) / activeFactory.width) * 100;
-                  const heatRadiusPct = (8 / activeFactory.length) * 100;
-                  
-                  // Heat level color based on machine load and health
-                  const isHighFriction = m.health !== 'Optimal' || m.load > 85;
-                  const gradId = isHighFriction ? 'heat-high' : m.load > 60 ? 'heat-medium' : 'heat-low';
+                {/* The Physical Factory Floor Grid */}
+                <div 
+                  ref={gridContainerRef}
+                style={{
+                  width: `${gridWidthPx}px`,
+                  height: `${gridHeightPx}px`,
+                  position: 'relative',
+                  flexShrink: 0
+                }}
+                className={`blueprint-grid-canvas border rounded shadow-2xl relative overflow-hidden transition-colors ${
+                  isDark 
+                    ? 'blueprint-grid-dark border-slate-700/80 shadow-cyan-950/20' 
+                    : 'blueprint-grid border-slate-300 shadow-slate-300/40'
+                }`}
+              >
+                {/* Architectural Coordinate Labels */}
+                <div className="absolute top-1.5 left-2 text-[9px] font-mono text-slate-500/60 pointer-events-none select-none">
+                  (0.0m, 0.0m)
+                </div>
+                <div className="absolute bottom-1.5 right-2 text-[9px] font-mono text-slate-500/60 pointer-events-none select-none">
+                  ({activeFactory.length}.0m, {activeFactory.width}.0m)
+                </div>
 
-                  return (
-                    <circle
-                      key={`heat-${m.id}`}
-                      cx={`${cxPct}%`}
-                      cy={`${cyPct}%`}
-                      r={`${heatRadiusPct}%`}
-                      fill={`url(#${gradId})`}
-                      className="animate-pulse-glow"
-                    />
-                  );
-                })}
+                {/* Industrial SVG Vectors & Flow System */}
+                <svg className="absolute inset-0 w-full h-full pointer-events-none z-10">
+                  <defs>
+                    <filter id="laserGlow" x="-50%" y="-50%" width="200%" height="200%">
+                      <feGaussianBlur in="SourceGraphic" stdDeviation="2" result="blur" />
+                      <feMerge>
+                        <feMergeNode in="blur" />
+                        <feMergeNode in="SourceGraphic" />
+                      </feMerge>
+                    </filter>
 
-                {/* Production Path Flow Connections & Animated Material Cargo */}
-                {flow.length >= 2 && flow.map((step, idx) => {
-                  if (idx === flow.length - 1) return null;
-                  const nextStep = flow[idx + 1];
-                  
-                  const machA = machines.find(m => m.id === step.machineId);
-                  const machB = machines.find(m => m.id === nextStep.machineId);
+                    <radialGradient id="heat-high" cx="50%" cy="50%" r="50%">
+                      <stop offset="0%" stopColor="#EF4444" stopOpacity="0.6" />
+                      <stop offset="60%" stopColor="#F59E0B" stopOpacity="0.25" />
+                      <stop offset="100%" stopColor="#EF4444" stopOpacity="0" />
+                    </radialGradient>
+                    <radialGradient id="heat-medium" cx="50%" cy="50%" r="50%">
+                      <stop offset="0%" stopColor="#F59E0B" stopOpacity="0.45" />
+                      <stop offset="100%" stopColor="#F59E0B" stopOpacity="0" />
+                    </radialGradient>
+                    <radialGradient id="heat-low" cx="50%" cy="50%" r="50%">
+                      <stop offset="0%" stopColor="#10B981" stopOpacity="0.35" />
+                      <stop offset="100%" stopColor="#10B981" stopOpacity="0" />
+                    </radialGradient>
+                  </defs>
 
-                  if (machA && machB) {
-                    // Center of machine nodes (in pixels / percentages)
-                    const px1 = ((getMachX(machA) + 1.2) / activeFactory.length) * 100;
-                    const py1 = ((getMachY(machA) + 1) / activeFactory.width) * 100;
-                    const px2 = ((getMachX(machB) + 1.2) / activeFactory.length) * 100;
-                    const py2 = ((getMachY(machB) + 1) / activeFactory.width) * 100;
+                  {/* Heatmap Halos */}
+                  {showHeatmap && machines.map((m) => {
+                    const { w, h } = getMachineDimensions(m.machineType);
+                    const cxPct = ((getMachX(m) + w / 2) / activeFactory.length) * 100;
+                    const cyPct = ((getMachY(m) + h / 2) / activeFactory.width) * 100;
+                    const heatRadiusPct = (8 / activeFactory.length) * 100;
 
-                    const x1 = `${px1}%`;
-                    const y1 = `${py1}%`;
-                    const x2 = `${px2}%`;
-                    const y2 = `${py2}%`;
-
-                    // Calculate Manhattan Distance
-                    const dist = Math.abs(machB.x - machA.x) + Math.abs(machB.y - machA.y);
-                    const isLongTravel = dist > 15;
-                    const lineColor = isLongTravel ? '#F59E0B' : '#2563EB';
-
-                    // SVG path d string for animateMotion
-                    const pathD = `M ${px1} ${py1} L ${px2} ${py2}`;
-
-                    // Duration based on speed and machine throughput
-                    const baseDuration = Math.max(1, 5 / (simSpeed * (machA.throughput / 100)));
+                    const isHighFriction = m.health !== 'Optimal' || m.load > 85;
+                    const gradId = isHighFriction ? 'heat-high' : m.load > 60 ? 'heat-medium' : 'heat-low';
 
                     return (
-                      <g key={`${step.id}-${idx}`}>
-                        {/* Heatmap overlay line for long distance */}
-                        {showHeatmap && isLongTravel && (
-                          <line
-                            x1={x1}
-                            y1={y1}
-                            x2={x2}
-                            y2={y2}
-                            stroke="#EF4444"
-                            strokeWidth="8"
+                      <circle
+                        key={`heat-${m.id}`}
+                        cx={`${cxPct}%`}
+                        cy={`${cyPct}%`}
+                        r={`${heatRadiusPct}%`}
+                        fill={`url(#${gradId})`}
+                        className="animate-pulse-glow"
+                      />
+                    );
+                  })}
+
+                  {/* Orthogonal Production Flow Tracks & Particle Telemetry */}
+                  {flow.length >= 2 && flow.map((step, idx) => {
+                    if (idx === flow.length - 1) return null;
+                    const nextStep = flow[idx + 1];
+                    
+                    const machA = machines.find(m => m.id === step.machineId);
+                    const machB = machines.find(m => m.id === nextStep.machineId);
+
+                    if (machA && machB) {
+                      const dimA = getMachineDimensions(machA.machineType);
+                      const dimB = getMachineDimensions(machB.machineType);
+
+                      const px1 = ((getMachX(machA) + dimA.w / 2) / activeFactory.length) * 100;
+                      const py1 = ((getMachY(machA) + dimA.h / 2) / activeFactory.width) * 100;
+                      const px2 = ((getMachX(machB) + dimB.w / 2) / activeFactory.length) * 100;
+                      const py2 = ((getMachY(machB) + dimB.h / 2) / activeFactory.width) * 100;
+
+                      const dist = Math.abs(machB.x - machA.x) + Math.abs(machB.y - machA.y);
+                      const isLongTravel = dist > 15;
+                      const trackColor = isLongTravel 
+                        ? '#F59E0B' 
+                        : isDark ? '#38BDF8' : '#2563EB';
+
+                      // Generate orthogonal Manhattan conveyor route with rounded elbows
+                      const pathD = getOrthogonalPath(px1, py1, px2, py2, 2.5);
+                      const baseDuration = Math.max(1, 4.5 / (simSpeed * (machA.throughput / 100)));
+
+                      return (
+                        <g key={`${step.id}-${idx}`}>
+                          {/* Heatmap overlay glow */}
+                          {showHeatmap && isLongTravel && (
+                            <path
+                              d={pathD}
+                              fill="none"
+                              stroke="#EF4444"
+                              strokeWidth="8"
+                              strokeOpacity="0.3"
+                              strokeLinecap="round"
+                            />
+                          )}
+
+                          {/* Dual-Rail Underlay Conveyor Track */}
+                          <path
+                            d={pathD}
+                            fill="none"
+                            stroke={isDark ? '#0F172A' : '#E2E8F0'}
+                            strokeWidth="6"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                          />
+
+                          {/* Outer Conveyor Glow */}
+                          <path
+                            d={pathD}
+                            fill="none"
+                            stroke={trackColor}
+                            strokeWidth="3"
                             strokeOpacity="0.3"
                             strokeLinecap="round"
+                            strokeLinejoin="round"
                           />
-                        )}
 
-                        {/* Outer glow stroke line */}
-                        <line
-                          x1={x1}
-                          y1={y1}
-                          x2={x2}
-                          y2={y2}
-                          stroke={lineColor}
-                          strokeWidth="3"
-                          strokeOpacity="0.4"
-                        />
-
-                        {/* Animated dashed line */}
-                        <line
-                          x1={x1}
-                          y1={y1}
-                          x2={x2}
-                          y2={y2}
-                          stroke={lineColor}
-                          strokeWidth="2.5"
-                          strokeDasharray="6,4"
-                          className={isSimulating ? "animate-flow-dash" : ""}
-                        />
-
-                        {/* Step Connection Endpoint Circles */}
-                        <circle cx={x1} cy={y1} r="4" fill={lineColor} />
-                        <circle cx={x2} cy={y2} r="4" fill={lineColor} />
-
-                        {/* Distance Label Badge on Midpoint */}
-                        <g transform={`translate(${(px1 + px2) / 2}, ${(py1 + py2) / 2})`}>
-                          <rect
-                            x="-16"
-                            y="-9"
-                            width="32"
-                            height="14"
-                            rx="3"
-                            fill="#1E293B"
-                            fillOpacity="0.8"
+                          {/* Animated Directional Laser Dash */}
+                          <path
+                            d={pathD}
+                            fill="none"
+                            stroke={trackColor}
+                            strokeWidth="2"
+                            strokeDasharray="6,4"
+                            className={isSimulating ? "animate-flow-dash" : ""}
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
                           />
-                          <text
-                            x="0"
-                            y="1"
-                            fill="#F8FAFC"
-                            fontSize="8"
-                            fontWeight="bold"
-                            textAnchor="middle"
-                            fontFamily="monospace"
-                          >
-                            {dist.toFixed(1)}m
-                          </text>
-                        </g>
 
-                        {/* Animated Cargo Crate Particles Gliding along Path */}
-                        {isSimulating && machA.status === 'Running' && (
-                          <g>
-                            {/* Glowing Particle Circle */}
-                            <circle r="4" fill="#3B82F6">
-                              <animateMotion
-                                path={pathD}
-                                dur={`${baseDuration}s`}
-                                repeatCount="indefinite"
-                              />
-                            </circle>
-                            {/* Cargo Icon Particle */}
+                          {/* Docking Terminals */}
+                          <circle cx={`${px1}%`} cy={`${py1}%`} r="3.5" fill={trackColor} />
+                          <circle cx={`${px2}%`} cy={`${py2}%`} r="3.5" fill={trackColor} />
+
+                          {/* Midpoint Distance Callout */}
+                          <g transform={`translate(${(px1 + px2) / 2}, ${(py1 + py2) / 2})`}>
+                            <rect
+                              x="-20"
+                              y="-8"
+                              width="40"
+                              height="16"
+                              rx="3"
+                              fill={isDark ? '#0F172A' : '#1E293B'}
+                              stroke={trackColor}
+                              strokeWidth="0.8"
+                            />
                             <text
-                              fontSize="10"
+                              x="0"
+                              y="3"
+                              fill="#F8FAFC"
+                              fontSize="8"
+                              fontWeight="bold"
                               textAnchor="middle"
-                              dy="3"
-                              className="select-none pointer-events-none"
+                              fontFamily="monospace"
                             >
-                              📦
-                              <animateMotion
-                                path={pathD}
-                                dur={`${baseDuration}s`}
-                                repeatCount="indefinite"
-                              />
+                              {dist.toFixed(1)}m
                             </text>
                           </g>
-                        )}
-                      </g>
-                    );
-                  }
-                  return null;
-                })}
-              </svg>
 
-              {/* Heatmap & Simulation HUD Floating Overlay */}
-              <div className="absolute bottom-3 left-3 z-30 flex flex-col gap-2 pointer-events-none">
-                {showHeatmap && (
-                  <div className="bg-slate-900/90 backdrop-blur-sm border border-slate-700 text-white p-2.5 rounded-lg text-[10px] font-mono space-y-1 shadow-lg pointer-events-auto">
-                    <div className="font-bold text-slate-300 uppercase tracking-wider mb-1 flex items-center gap-1.5">
-                      <Flame className="w-3 h-3 text-amber-400 fill-current" />
-                      <span>Friction Heatmap</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <span className="w-2.5 h-2.5 rounded-full bg-emerald-500"></span>
-                      <span>Low Travel (&lt;10m)</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <span className="w-2.5 h-2.5 rounded-full bg-amber-500"></span>
-                      <span>Moderate (10-15m)</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <span className="w-2.5 h-2.5 rounded-full bg-rose-500"></span>
-                      <span>High Friction (&gt;15m)</span>
-                    </div>
-                  </div>
-                )}
+                          {/* High-Tech Glowing Energy Packet (Replaces 📦) */}
+                          {isSimulating && machA.status === 'Running' && (
+                            <g filter="url(#laserGlow)">
+                              <circle r="4" fill={isDark ? '#38BDF8' : '#2563EB'}>
+                                <animateMotion
+                                  path={pathD}
+                                  dur={`${baseDuration}s`}
+                                  repeatCount="indefinite"
+                                />
+                              </circle>
+                              <circle r="2" fill="#FFFFFF">
+                                <animateMotion
+                                  path={pathD}
+                                  dur={`${baseDuration}s`}
+                                  repeatCount="indefinite"
+                                />
+                              </circle>
+                              <circle r="2" fill={isDark ? '#818CF8' : '#60A5FA'} opacity="0.6">
+                                <animateMotion
+                                  path={pathD}
+                                  dur={`${baseDuration}s`}
+                                  begin="-0.12s"
+                                  repeatCount="indefinite"
+                                />
+                              </circle>
+                            </g>
+                          )}
+                        </g>
+                      );
+                    }
+                    return null;
+                  })}
+                </svg>
 
-                {isSimulating && (
-                  <div className="bg-emerald-950/80 backdrop-blur-sm border border-emerald-600/50 text-emerald-300 px-3 py-1.5 rounded-lg text-[10px] font-mono font-bold flex items-center gap-2 shadow-lg">
-                    <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping"></span>
-                    <span>LIVE SIMULATION ({simSpeed}X) — MATERIAL FLOW ACTIVE</span>
-                  </div>
-                )}
-              </div>
+                {/* Render Placed Machine Nodes */}
+                {machines.map((mach) => {
+                  const isSelected = mach.id === selectedMachineId;
+                  const isDragging = mach.id === draggingMachineId;
+                  const { w, h } = getMachineDimensions(mach.machineType);
 
-              {/* Render placed machines */}
-              {machines.map((mach) => {
-                const isSelected = mach.id === selectedMachineId;
-                const isDragging = mach.id === draggingMachineId;
+                  const posX = getMachX(mach);
+                  const posY = getMachY(mach);
 
-                const posX = getMachX(mach);
-                const posY = getMachY(mach);
+                  const tel = telemetryByMachine[mach.id];
+                  const isAlarm = tel?.status === 'Alarm' || tel?.alert !== null;
+                  const isOverheating = tel && tel.temp > 75;
 
-                const tel = telemetryByMachine[mach.id];
-                const isAlarm = tel?.status === 'Alarm' || tel?.alert !== null;
-                const isOverheating = tel && tel.temp > 75;
+                  const machinePositionStyle = {
+                    left: `${(posX / activeFactory.length) * 100}%`,
+                    top: `${(posY / activeFactory.width) * 100}%`,
+                    width: `${(w / activeFactory.length) * 100}%`,
+                    height: `${(h / activeFactory.width) * 100}%`,
+                    transform: `rotate(${mach.orientation}deg)`,
+                    transition: isDragging ? 'none' : 'transform 0.15s, left 0.08s, top 0.08s'
+                  };
 
-                // Position machine absolutely inside the grid container using percentages
-                const machinePositionStyle = {
-                  left: `${(posX / activeFactory.length) * 100}%`,
-                  top: `${(posY / activeFactory.width) * 100}%`,
-                  width: `${(2.4 / activeFactory.length) * 100}%`, // ~2.4m width visual size
-                  height: `${(2.0 / activeFactory.width) * 100}%`, // ~2m height visual size
-                  transform: `rotate(${mach.orientation}deg)`,
-                  transition: isDragging ? 'none' : 'transform 0.2s, left 0.1s, top 0.1s'
-                };
+                  return (
+                    <div
+                      key={mach.id}
+                      onMouseDown={(e) => handleGridMouseDown(e, mach)}
+                      onDoubleClick={() => setInspectingMachine(mach)}
+                      style={machinePositionStyle}
+                      className={`absolute rounded flex flex-col justify-between cursor-move select-none z-20 transition-all ${
+                        isDark 
+                          ? 'bg-slate-900/95 border border-slate-700/80 shadow-lg text-slate-200' 
+                          : 'bg-white border border-slate-300 shadow-md text-slate-800'
+                      } ${
+                        isAlarm 
+                          ? 'ring-2 ring-rose-500 animate-pulse' 
+                          : isSelected 
+                            ? isDark ? 'ring-2 ring-cyan-400 border-cyan-400' : 'ring-2 ring-blue-500 border-blue-500' 
+                            : isDark ? 'hover:border-slate-500' : 'hover:border-slate-400'
+                      }`}
+                    >
+                      {/* OSHA Safety Clearance Buffer Halo */}
+                      {showSafetyZones && (
+                        <div 
+                          className="absolute -inset-2.5 rounded border border-amber-500/40 safety-hatch-pattern pointer-events-none transition-opacity z-[-1]"
+                          style={{ opacity: isSelected ? 1 : 0.5 }}
+                        />
+                      )}
 
-                return (
-                  <div
-                    key={mach.id}
-                    onMouseDown={(e) => handleGridMouseDown(e, mach)}
-                    onDoubleClick={() => setInspectingMachine(mach)}
-                    style={machinePositionStyle}
-                    className={`absolute rounded border flex flex-col items-center justify-center cursor-move transition-all select-none z-20 shadow-sm ${
-                      isAlarm 
-                        ? 'border-rose-500 bg-rose-50 ring-4 ring-rose-500/40 animate-pulse' 
-                        : isSelected 
-                          ? 'border-primary bg-blue-50 ring-2 ring-primary/20' 
-                          : 'border-slate-300 bg-white hover:border-slate-400'
-                    }`}
-                  >
-                    {/* Machine ID Tag */}
-                    <div className="absolute -top-5 left-1/2 -translate-x-1/2 bg-slate-800 text-white text-[8px] font-bold font-mono px-1 rounded border border-slate-700 pointer-events-none whitespace-nowrap flex items-center gap-1">
-                      {isAlarm && <span className="w-1.5 h-1.5 rounded-full bg-rose-500 animate-ping"></span>}
-                      <span>{mach.machineName.split(' ')[0].substring(0, 4)}-{mach.machineName.split(' ')[1] || '01'}</span>
-                    </div>
+                      {/* CAD Selection Anchors */}
+                      {isSelected && (
+                        <div className="absolute -inset-1 border border-cyan-400/80 pointer-events-none">
+                          <div className="absolute -top-1 -left-1 w-2 h-2 bg-white border border-cyan-600" />
+                          <div className="absolute -top-1 -right-1 w-2 h-2 bg-white border border-cyan-600" />
+                          <div className="absolute -bottom-1 -left-1 w-2 h-2 bg-white border border-cyan-600" />
+                          <div className="absolute -bottom-1 -right-1 w-2 h-2 bg-white border border-cyan-600" />
+                          {/* Rotation indicator pointer */}
+                          <div className="absolute -top-3 left-1/2 -translate-x-1/2 w-2 h-2 rounded-full bg-cyan-400 border border-white" />
+                        </div>
+                      )}
 
-                    {/* Machine Status Dot / Alarm Beacon */}
-                    <div className={`absolute top-1 right-1 w-1.5 h-1.5 rounded-full ${
-                      isAlarm 
-                        ? 'bg-rose-600 animate-ping' 
-                        : mach.status === 'Running' 
-                          ? 'bg-success animate-pulse' 
-                          : 'bg-slate-400'
-                    }`}></div>
-
-                    {/* Live Temperature Pill */}
-                    {tel && (
-                      <div 
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setInspectingMachine(mach);
-                        }}
-                        title="Click to view live telemetry"
-                        className={`absolute -bottom-3 left-1/2 -translate-x-1/2 text-[7px] font-mono font-bold px-1 rounded border shadow-2xs cursor-pointer ${
-                          isOverheating 
-                            ? 'bg-rose-500 text-white border-rose-600 animate-bounce' 
-                            : 'bg-slate-900 text-slate-200 border-slate-700 hover:bg-primary'
-                        }`}
-                      >
-                        {tel.temp}°C
+                      {/* Machine Header: ID & Status LED */}
+                      <div className={`h-4.5 px-1.5 flex items-center justify-between border-b shrink-0 text-[8px] font-mono font-bold ${
+                        isDark ? 'border-slate-800 bg-slate-950/60' : 'border-slate-100 bg-slate-50'
+                      }`}>
+                        <span className="truncate max-w-[70%]">
+                          {mach.machineName.split(' ')[0].substring(0, 4)}-{mach.machineName.split(' ')[1] || '01'}
+                        </span>
+                        <div className="flex items-center gap-1">
+                          <span className={`w-1.5 h-1.5 rounded-full ${
+                            isAlarm 
+                              ? 'bg-rose-500 animate-ping' 
+                              : mach.status === 'Running' 
+                                ? 'bg-emerald-400 animate-pulse' 
+                                : 'bg-slate-500'
+                          }`} />
+                        </div>
                       </div>
-                    )}
 
-                    {/* Asset Graphic/Icon */}
-                    <span className="text-sm">
-                      {mach.machineType === 'Input' ? '📦' :
-                       mach.machineType === 'Processing' ? '⚙️' :
-                       mach.machineType === 'Assembly' ? '🤝' :
-                       mach.machineType === 'Logistics' ? '🗳️' : '🔍'}
-                    </span>
-                    
-                    {/* Compact Label */}
-                    <span className="text-[7px] text-slate-500 font-bold font-mono truncate w-full text-center px-1">
-                      M{machines.indexOf(mach) + 1}
-                    </span>
-                  </div>
-                );
-              })}
+                      {/* Machine Body: Precision CAD Schematic Vector */}
+                      <div className="flex-1 flex items-center justify-center p-1 overflow-hidden">
+                        <MachineSchematic 
+                          type={mach.machineType} 
+                          status={mach.status} 
+                          isSelected={isSelected} 
+                          isDark={isDark} 
+                        />
+                      </div>
+
+                      {/* Machine Footer: Telemetry & Node Label */}
+                      <div className={`h-4 px-1 flex items-center justify-between border-t shrink-0 text-[7px] font-mono ${
+                        isDark ? 'border-slate-800 bg-slate-950/40 text-slate-400' : 'border-slate-100 bg-slate-50 text-slate-500'
+                      }`}>
+                        <span className="font-bold">M{machines.indexOf(mach) + 1}</span>
+                        {tel && (
+                          <span className={`font-bold ${isOverheating ? 'text-rose-400 animate-bounce' : 'text-cyan-400'}`}>
+                            {tel.temp}°C
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
             </div>
           </div>
+
+          {/* Floating CAD HUD at Bottom of Viewport */}
+          <div className="absolute bottom-5 left-1/2 -translate-x-1/2 z-30 flex items-center gap-1.5 px-3 py-1.5 rounded-lg border shadow-2xl backdrop-blur-md select-none font-mono text-xs transition-all pointer-events-auto bg-slate-900/90 border-slate-700/80 text-slate-200">
+            {/* Tool Selection */}
+            <button
+              onClick={() => setActiveTool(activeTool === 'select' ? 'pan' : 'select')}
+              className={`p-1.5 rounded transition-all flex items-center gap-1 ${
+                activeTool === 'pan' ? 'bg-cyan-500 text-slate-950 font-bold' : 'hover:bg-slate-800 text-slate-300'
+              }`}
+              title="Pan Tool (Hand)"
+            >
+              <Move className="w-3.5 h-3.5" />
+              <span className="text-[10px] hidden sm:inline">{activeTool === 'pan' ? 'PAN' : 'SELECT'}</span>
+            </button>
+
+            <div className="h-4 w-px bg-slate-700 mx-1" />
+
+            {/* Zoom Controls */}
+            <button 
+              onClick={() => handleZoom('out')} 
+              className="p-1.5 hover:bg-slate-800 rounded transition-colors text-slate-300"
+              title="Zoom Out"
+            >
+              <ZoomOut className="w-3.5 h-3.5" />
+            </button>
+            <span className="text-[10px] font-bold text-cyan-400 px-1 min-w-[36px] text-center">
+              {Math.round(zoomLevel * 100)}%
+            </span>
+            <button 
+              onClick={() => handleZoom('in')} 
+              className="p-1.5 hover:bg-slate-800 rounded transition-colors text-slate-300"
+              title="Zoom In"
+            >
+              <ZoomIn className="w-3.5 h-3.5" />
+            </button>
+            <button 
+              onClick={() => handleZoom('reset')} 
+              className="p-1.5 hover:bg-slate-800 rounded transition-colors text-slate-300"
+              title="Reset View"
+            >
+              <Maximize2 className="w-3.5 h-3.5" />
+            </button>
+
+            <div className="h-4 w-px bg-slate-700 mx-1" />
+
+            {/* Rulers & Minimap Toggles */}
+            <button
+              onClick={() => setShowRulers(!showRulers)}
+              className={`px-2 py-1 rounded text-[10px] font-bold transition-all ${
+                showRulers ? 'bg-slate-800 text-cyan-300' : 'text-slate-500 hover:text-slate-300'
+              }`}
+            >
+              RULERS
+            </button>
+            <button
+              onClick={() => setShowMinimap(!showMinimap)}
+              className={`px-2 py-1 rounded text-[10px] font-bold transition-all ${
+                showMinimap ? 'bg-slate-800 text-cyan-300' : 'text-slate-500 hover:text-slate-300'
+              }`}
+            >
+              MAP
+            </button>
+
+            {/* Cursor Coordinate Display */}
+            {cursorPos.x !== null && (
+              <>
+                <div className="h-4 w-px bg-slate-700 mx-1" />
+                <span className="text-[10px] text-slate-400 px-1">
+                  X: <b className="text-white">{cursorPos.x}m</b> Y: <b className="text-white">{cursorPos.y}m</b>
+                </span>
+              </>
+            )}
+          </div>
+
+          {/* Floating Minimap in Bottom-Right */}
+          {showMinimap && (
+            <div className="absolute bottom-5 right-5 z-30 pointer-events-auto">
+              <FactoryMinimap 
+                factory={activeFactory} 
+                machines={machines} 
+                flow={flow} 
+                viewportRef={canvasViewportRef}
+                gridWidthPx={gridWidthPx}
+                isDark={isDark}
+              />
+            </div>
+          )}
         </main>
 
-        {/* Right Side: Property Inspector Panel */}
-        <aside className="w-80 bg-white border-l border-slate-200 flex flex-col h-full shrink-0 shadow-sm">
-          <div className="p-4 border-b border-slate-200">
-            <h2 className="font-bold text-slate-800 text-sm">Inspector</h2>
-            <p className="text-[10px] text-slate-400 mt-0.5 font-semibold">Modify selected machine parameters.</p>
+        {/* Right Side: Machine Property Inspector */}
+        <aside className={`w-80 border-l flex flex-col h-full shrink-0 shadow-sm select-none ${
+          isDark ? 'bg-slate-900/90 border-slate-800' : 'bg-white border-slate-200'
+        }`}>
+          <div className={`p-3.5 border-b ${isDark ? 'border-slate-800' : 'border-slate-200'}`}>
+            <h2 className="font-bold text-xs uppercase tracking-wider text-cyan-400">Node Inspector</h2>
+            <p className="text-[10px] text-slate-400 mt-0.5">Parameters & real-time telemetry.</p>
           </div>
 
           {selectedMachine ? (
-            <div className="flex-1 overflow-y-auto p-4 space-y-6">
-              {/* Machine Identity */}
-              <div className="space-y-4">
-                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Machine Identity</span>
-                
-                {/* Name */}
+            <div className="flex-1 overflow-y-auto p-4 space-y-5">
+              {/* Identity */}
+              <div className="space-y-3">
+                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Identity</span>
                 <div>
-                  <label className="block text-[10px] text-slate-500 font-bold mb-1">Machine Name</label>
+                  <label className="block text-[10px] text-slate-400 font-bold mb-1">Name</label>
                   <input
                     type="text"
                     value={selectedMachine.machineName}
                     onChange={(e) => updateMachine(selectedMachine.id, { machineName: e.target.value })}
-                    className="w-full bg-slate-50 border border-slate-200 rounded px-2.5 py-1.5 text-xs font-semibold text-slate-800 outline-none focus:border-primary focus:bg-white"
+                    className={`w-full border rounded px-2.5 py-1.5 text-xs font-semibold outline-none ${
+                      isDark ? 'bg-slate-800 border-slate-700 text-white focus:border-cyan-400' : 'bg-slate-50 border-slate-300 text-slate-800 focus:border-blue-500'
+                    }`}
                   />
                 </div>
 
-                {/* Type */}
                 <div>
-                  <label className="block text-[10px] text-slate-500 font-bold mb-1">Machine Type</label>
+                  <label className="block text-[10px] text-slate-400 font-bold mb-1">Type</label>
                   <select
                     value={selectedMachine.machineType}
                     onChange={(e) => updateMachine(selectedMachine.id, { machineType: e.target.value })}
-                    className="w-full bg-slate-50 border border-slate-200 rounded px-2.5 py-1.5 text-xs font-semibold text-slate-800 outline-none focus:border-primary focus:bg-white"
+                    className={`w-full border rounded px-2.5 py-1.5 text-xs font-semibold outline-none ${
+                      isDark ? 'bg-slate-800 border-slate-700 text-white focus:border-cyan-400' : 'bg-slate-50 border-slate-300 text-slate-800 focus:border-blue-500'
+                    }`}
                   >
-                    <option value="Input">Input (Raw Material)</option>
-                    <option value="Processing">Processing (Cutting/Drilling)</option>
-                    <option value="Assembly">Assembly</option>
-                    <option value="Quality">Quality Check</option>
-                    <option value="Logistics">Logistics (Packaging/Warehouse)</option>
-                    <option value="Storage">Storage</option>
+                    <option value="Input">Input (Raw Material Dock)</option>
+                    <option value="Processing">Processing (CNC Mill / Machining)</option>
+                    <option value="Assembly">Assembly (Robotic / Manual Cell)</option>
+                    <option value="Quality">Quality (CMM Optical Inspection)</option>
+                    <option value="Logistics">Logistics (Packaging & Shipping)</option>
+                    <option value="Storage">Storage (High-Bay Warehouse Racking)</option>
                   </select>
                 </div>
               </div>
 
-              {/* Spatial Data */}
-              <div className="space-y-4 border-t border-slate-100 pt-4">
-                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Spatial Data</span>
-                
-                {/* Coordinates */}
+              {/* Spatial Coordinates */}
+              <div className={`space-y-3 border-t pt-4 ${isDark ? 'border-slate-800' : 'border-slate-100'}`}>
+                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Position & Angle</span>
                 <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <label className="block text-[10px] text-slate-500 font-bold mb-1">Position X</label>
+                    <label className="block text-[10px] text-slate-400 font-bold mb-1">Position X</label>
                     <div className="relative">
                       <input
                         type="number"
                         value={selectedMachine.x}
                         onChange={(e) => updateMachine(selectedMachine.id, { x: parseFloat(e.target.value) || 0 })}
-                        className="w-full bg-slate-50 border border-slate-200 rounded pl-2.5 pr-6 py-1.5 text-xs font-mono font-semibold text-slate-800 outline-none"
+                        className={`w-full border rounded pl-2.5 pr-6 py-1.5 text-xs font-mono font-semibold outline-none ${
+                          isDark ? 'bg-slate-800 border-slate-700 text-white' : 'bg-slate-50 border-slate-300 text-slate-800'
+                        }`}
                       />
-                      <span className="absolute right-2 top-1/2 -translate-y-1/2 text-[10px] text-slate-400 font-mono">m</span>
+                      <span className="absolute right-2 top-1/2 -translate-y-1/2 text-[10px] text-slate-500 font-mono">m</span>
                     </div>
                   </div>
                   <div>
-                    <label className="block text-[10px] text-slate-500 font-bold mb-1">Position Y</label>
+                    <label className="block text-[10px] text-slate-400 font-bold mb-1">Position Y</label>
                     <div className="relative">
                       <input
                         type="number"
                         value={selectedMachine.y}
                         onChange={(e) => updateMachine(selectedMachine.id, { y: parseFloat(e.target.value) || 0 })}
-                        className="w-full bg-slate-50 border border-slate-200 rounded pl-2.5 pr-6 py-1.5 text-xs font-mono font-semibold text-slate-800 outline-none"
+                        className={`w-full border rounded pl-2.5 pr-6 py-1.5 text-xs font-mono font-semibold outline-none ${
+                          isDark ? 'bg-slate-800 border-slate-700 text-white' : 'bg-slate-50 border-slate-300 text-slate-800'
+                        }`}
                       />
-                      <span className="absolute right-2 top-1/2 -translate-y-1/2 text-[10px] text-slate-400 font-mono">m</span>
+                      <span className="absolute right-2 top-1/2 -translate-y-1/2 text-[10px] text-slate-500 font-mono">m</span>
                     </div>
                   </div>
                 </div>
 
-                {/* Orientation Slider */}
                 <div>
                   <div className="flex justify-between items-center mb-1">
-                    <label className="block text-[10px] text-slate-500 font-bold">Orientation</label>
-                    <span className="text-[10px] font-mono font-bold text-slate-600">{selectedMachine.orientation}°</span>
+                    <label className="block text-[10px] text-slate-400 font-bold">Orientation</label>
+                    <span className="text-[10px] font-mono font-bold text-cyan-400">{selectedMachine.orientation}°</span>
                   </div>
                   <input
                     type="range"
@@ -933,9 +1078,9 @@ export default function LayoutDesigner() {
                     step="90"
                     value={selectedMachine.orientation}
                     onChange={(e) => updateMachine(selectedMachine.id, { orientation: parseInt(e.target.value) })}
-                    className="w-full h-1.5 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-primary"
+                    className="w-full h-1.5 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-cyan-400"
                   />
-                  <div className="flex justify-between text-[7px] text-slate-400 font-mono font-bold mt-1 px-1">
+                  <div className="flex justify-between text-[8px] text-slate-500 font-mono mt-1 px-1">
                     <span>0°</span>
                     <span>90°</span>
                     <span>180°</span>
@@ -944,71 +1089,30 @@ export default function LayoutDesigner() {
                 </div>
               </div>
 
-              {/* Operational & Health Controls */}
-              <div className="space-y-4 border-t border-slate-100 pt-4">
+              {/* Operational & Health */}
+              <div className={`space-y-3 border-t pt-4 ${isDark ? 'border-slate-800' : 'border-slate-100'}`}>
                 <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Operational Status</span>
-                
-                {/* Status Toggle */}
                 <div>
-                  <label className="block text-[10px] text-slate-500 font-bold mb-1">Live Machine Status</label>
+                  <label className="block text-[10px] text-slate-400 font-bold mb-1">State</label>
                   <select
                     value={selectedMachine.status}
                     onChange={(e) => updateMachine(selectedMachine.id, { status: e.target.value })}
-                    className="w-full bg-slate-50 border border-slate-200 rounded px-2.5 py-1.5 text-xs font-semibold text-slate-800 outline-none focus:border-primary focus:bg-white"
+                    className={`w-full border rounded px-2.5 py-1.5 text-xs font-semibold outline-none ${
+                      isDark ? 'bg-slate-800 border-slate-700 text-white focus:border-cyan-400' : 'bg-slate-50 border-slate-300 text-slate-800'
+                    }`}
                   >
-                    <option value="Running">🟢 Running (Active Particle Flow)</option>
-                    <option value="Idle">⚪ Idle (Standby)</option>
+                    <option value="Running">🟢 Running (Conveyor Active)</option>
+                    <option value="Idle">⚪ Standby / Idle</option>
                     <option value="Maintenance">🔴 Maintenance Required</option>
                   </select>
                 </div>
-
-                {/* Health Toggle */}
-                <div>
-                  <label className="block text-[10px] text-slate-500 font-bold mb-1">Health State</label>
-                  <select
-                    value={selectedMachine.health}
-                    onChange={(e) => updateMachine(selectedMachine.id, { health: e.target.value })}
-                    className="w-full bg-slate-50 border border-slate-200 rounded px-2.5 py-1.5 text-xs font-semibold text-slate-800 outline-none focus:border-primary focus:bg-white"
-                  >
-                    <option value="Optimal">Optimal Performance</option>
-                    <option value="Maintenance Required">Maintenance Required (High Friction)</option>
-                  </select>
-                </div>
               </div>
 
-              {/* Simulated KPIs */}
-              <div className="space-y-3 border-t border-slate-100 pt-4">
-                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Simulated KPI</span>
-                <div className="flex justify-between items-center text-xs font-semibold text-slate-700">
-                  <span>Throughput</span>
-                  <span className="font-mono text-primary">{selectedMachine.throughput} u/h</span>
-                </div>
-                <div className="w-full bg-slate-100 rounded-full h-1.5">
-                  <div 
-                    style={{ width: `${Math.min(100, (selectedMachine.throughput / 200) * 100)}%` }} 
-                    className="bg-primary h-1.5 rounded-full"
-                  ></div>
-                </div>
-              </div>
-
-              {/* Illustrative blueprint block at bottom */}
-              <div className="border-t border-slate-100 pt-6 flex flex-col items-center">
-                <div className="w-full h-28 bg-slate-50 rounded-lg border border-slate-200 flex items-center justify-center relative overflow-hidden">
-                  {/* Stylized custom SVG blueprint machine vector representation */}
-                  <svg className="w-16 h-16 text-slate-300 opacity-60" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                  </svg>
-                  <div className="absolute inset-0 bg-gradient-to-t from-slate-100/50 to-transparent"></div>
-                </div>
-                <span className="text-[8px] font-mono text-slate-400 font-bold tracking-wider mt-2">
-                  NODE ASSET {selectedMachine.machineName.toUpperCase().replace(' ', '-')}-V4
-                </span>
-              </div>
-
-              {/* Live Telemetry & Sensor Dials */}
+              {/* Real-time Edge Telemetry Card */}
               {selectedMachine && (
-                <div className="space-y-3 border-t border-slate-100 pt-4 bg-slate-900 -mx-4 -mb-4 p-4 rounded-b-lg text-slate-100">
+                <div className={`space-y-3 border-t pt-4 rounded-lg p-3 text-slate-100 ${
+                  isDark ? 'bg-slate-950 border-slate-800' : 'bg-slate-900 border-slate-800'
+                }`}>
                   <div className="flex items-center justify-between">
                     <span className="text-[10px] font-bold text-slate-300 uppercase tracking-wider flex items-center gap-1.5">
                       <Radio className="w-3 h-3 text-emerald-400 animate-pulse" />
@@ -1026,24 +1130,24 @@ export default function LayoutDesigner() {
                     };
                     return (
                       <div className="grid grid-cols-2 gap-2 text-center text-xs font-mono">
-                        <div className="bg-slate-950 p-2 rounded border border-slate-800">
-                          <span className="text-[9px] text-slate-400 uppercase block">Temp</span>
+                        <div className="bg-slate-900 p-2 rounded border border-slate-800">
+                          <span className="text-[8px] text-slate-400 uppercase block">Temp</span>
                           <span className={`font-bold ${selTel.temp > 75 ? 'text-rose-400' : 'text-white'}`}>
                             {selTel.temp}°C
                           </span>
                         </div>
-                        <div className="bg-slate-950 p-2 rounded border border-slate-800">
-                          <span className="text-[9px] text-slate-400 uppercase block">Vib</span>
+                        <div className="bg-slate-900 p-2 rounded border border-slate-800">
+                          <span className="text-[8px] text-slate-400 uppercase block">Vibration</span>
                           <span className={`font-bold ${selTel.vibration > 4.5 ? 'text-amber-400' : 'text-white'}`}>
                             {selTel.vibration} mm/s
                           </span>
                         </div>
-                        <div className="bg-slate-950 p-2 rounded border border-slate-800">
-                          <span className="text-[9px] text-slate-400 uppercase block">Spindle</span>
+                        <div className="bg-slate-900 p-2 rounded border border-slate-800">
+                          <span className="text-[8px] text-slate-400 uppercase block">Spindle</span>
                           <span className="font-bold text-white">{selTel.rpm} RPM</span>
                         </div>
-                        <div className="bg-slate-950 p-2 rounded border border-slate-800">
-                          <span className="text-[9px] text-slate-400 uppercase block">Power</span>
+                        <div className="bg-slate-900 p-2 rounded border border-slate-800">
+                          <span className="text-[8px] text-slate-400 uppercase block">Power</span>
                           <span className="font-bold text-amber-300">{selTel.powerKw} kW</span>
                         </div>
                       </div>
@@ -1052,32 +1156,32 @@ export default function LayoutDesigner() {
 
                   <button
                     onClick={() => setInspectingMachine(selectedMachine)}
-                    className="w-full py-2 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white rounded text-xs font-bold transition-all shadow-sm flex items-center justify-center gap-1.5"
+                    className="w-full py-2 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white rounded text-xs font-bold transition-all shadow-sm flex items-center justify-center gap-1.5"
                   >
                     <Activity className="w-3.5 h-3.5" />
-                    <span>Inspect Live Waveforms & Faults</span>
+                    <span>Inspect Live Waveforms</span>
                   </button>
                 </div>
               )}
 
               {/* Delete Button */}
-              <div className="pt-4 border-t border-slate-100 flex justify-end">
+              <div className="pt-2 flex justify-end">
                 <button
                   onClick={handleDeleteSelected}
-                  className="flex items-center gap-1.5 px-3 py-1.5 bg-rose-50 text-rose-600 rounded text-xs font-bold hover:bg-rose-100 transition-all border border-rose-100"
+                  className="flex items-center gap-1.5 px-3 py-1.5 bg-rose-950/40 text-rose-400 hover:bg-rose-900/50 rounded text-xs font-bold transition-all border border-rose-800/80"
                 >
                   <Trash2 className="w-3.5 h-3.5" />
-                  Delete Machine
+                  Delete Node
                 </button>
               </div>
 
             </div>
           ) : (
-            <div className="flex-1 flex flex-col items-center justify-center p-6 text-center text-slate-400">
-              <Compass className="w-8 h-8 text-slate-300 mb-2 animate-pulse" />
+            <div className="flex-1 flex flex-col items-center justify-center p-6 text-center text-slate-500">
+              <Compass className="w-8 h-8 text-slate-600 mb-2 animate-pulse" />
               <p className="text-xs font-semibold">No node selected</p>
-              <p className="text-[10px] text-slate-400 mt-1 max-w-[180px]">
-                Click on any placed machine in the grid to inspect and adjust properties.
+              <p className="text-[10px] text-slate-500 mt-1 max-w-[180px]">
+                Click on any placed machine in the grid to inspect and adjust parameters.
               </p>
             </div>
           )}
@@ -1085,33 +1189,39 @@ export default function LayoutDesigner() {
       </div>
 
       {/* Bottom Action Footer Bar */}
-      <footer className="h-16 bg-white border-t border-slate-200 flex items-center justify-between px-8 z-10 shrink-0 shadow-sm">
-        <div className="flex items-center gap-2 text-xs font-bold text-slate-500">
-          <span className="w-2 h-2 rounded-full bg-blue-500 animate-pulse"></span>
-          <span>Editing Layout: <span className="text-slate-800">{activeFactory.name}</span></span>
-          <span className="text-slate-300 mx-2">|</span>
-          <span className="font-mono text-[10px] text-slate-400">Nodes placed: {machines.length}</span>
+      <footer className={`h-14 border-t flex items-center justify-between px-6 z-10 shrink-0 select-none ${
+        isDark ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200'
+      }`}>
+        <div className="flex items-center gap-2 text-xs font-bold text-slate-400">
+          <span className="w-2 h-2 rounded-full bg-cyan-400 animate-pulse"></span>
+          <span>Layout: <span className="text-white">{activeFactory.name}</span></span>
+          <span className="text-slate-700 mx-2">|</span>
+          <span className="font-mono text-[11px]">Nodes placed: {machines.length}</span>
         </div>
 
-        <div className="flex gap-4">
+        <div className="flex gap-3">
           <button
             onClick={handleResetLayout}
-            className="px-4 py-2 border border-slate-200 text-slate-600 rounded hover:bg-slate-50 transition-all text-xs font-bold"
+            className={`px-3 py-1.5 rounded text-xs font-bold border transition-all ${
+              isDark ? 'border-slate-700 text-slate-400 hover:bg-slate-800' : 'border-slate-300 text-slate-600 hover:bg-slate-100'
+            }`}
           >
             Reset
           </button>
           <button
             onClick={() => navigate('/')}
-            className="px-4 py-2 border border-slate-200 text-slate-600 rounded hover:bg-slate-50 transition-all text-xs font-bold"
+            className={`px-3 py-1.5 rounded text-xs font-bold border transition-all ${
+              isDark ? 'border-slate-700 text-slate-300 hover:bg-slate-800' : 'border-slate-300 text-slate-700 hover:bg-slate-100'
+            }`}
           >
-            Save Layout
+            Dashboard
           </button>
           <button
             onClick={handleCalculateLayout}
             disabled={machines.length === 0}
-            className="px-6 py-2 bg-warning hover:bg-amber-600 text-white rounded transition-all text-xs font-extrabold shadow-soft disabled:opacity-50 disabled:cursor-not-allowed"
+            className="px-5 py-1.5 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 rounded transition-all text-xs font-black shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            Calculate Layout
+            Calculate Flow & Efficiency
           </button>
         </div>
       </footer>
@@ -1126,4 +1236,3 @@ export default function LayoutDesigner() {
     </div>
   );
 }
-

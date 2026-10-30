@@ -79,11 +79,11 @@ export default function CreateFactory() {
 
     try {
       const created = await createNewFactory({
-        name: formData.name,
-        length: parseFloat(formData.length),
-        width: parseFloat(formData.width),
-        departmentCount: parseInt(formData.departmentCount),
-        description: formData.description
+        name: formData.name.trim(),
+        length: parseFloat(formData.length) || 100,
+        width: parseFloat(formData.width) || 60,
+        departmentCount: parseInt(formData.departmentCount) || 4,
+        description: formData.description || ''
       });
       
       // Load details of the created factory to establish context
@@ -105,13 +105,13 @@ export default function CreateFactory() {
               throughput: mDef.throughput,
               health: mDef.health,
               load: mDef.load
-            });
+            }, created.id);
             if (newM && newM.id) {
               createdIds.push(newM.id);
             }
           }
           if (createdIds.length > 0) {
-            await saveFlow(createdIds);
+            await saveFlow(createdIds, created.id);
           }
         }
       }
