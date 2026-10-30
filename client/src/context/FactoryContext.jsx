@@ -200,8 +200,13 @@ export const FactoryProvider = ({ children }) => {
 
   // Derived layout calculations and metrics
   const metrics = useMemo(() => {
-    return calculateLayoutMetrics(machines, flow);
-  }, [machines, flow]);
+    return calculateLayoutMetrics(
+      machines, 
+      flow, 
+      activeFactory ? activeFactory.length : 80, 
+      activeFactory ? activeFactory.width : 50
+    );
+  }, [machines, flow, activeFactory]);
 
   // Derived suggestions from layout geometry
   const suggestions = useMemo(() => {
