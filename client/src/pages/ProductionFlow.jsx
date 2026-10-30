@@ -42,6 +42,13 @@ export default function ProductionFlow() {
     setLocalSteps(prev => [...prev, machines[0].id]);
   };
 
+  const handleAutoSequence = () => {
+    if (machines.length < 2) return;
+    // Sort placed machines along the x-axis processing direction
+    const sorted = [...machines].sort((a, b) => a.x - b.x);
+    setLocalSteps(sorted.map(m => m.id));
+  };
+
   const handleRemoveStep = (index) => {
     setLocalSteps(prev => prev.filter((_, i) => i !== index));
   };
@@ -95,17 +102,30 @@ export default function ProductionFlow() {
       </div>
 
       {/* Main Flow Editor Area */}
-      <div className="max-w-3xl mx-auto bg-white rounded-custom border border-slate-200 shadow-soft overflow-hidden">
-        <div className="p-6 border-b border-slate-200 flex items-center justify-between bg-slate-50/50">
-          <h2 className="text-sm font-bold text-slate-800 uppercase tracking-wider">Production Steps</h2>
-          <button
-            onClick={handleAddStep}
-            disabled={machines.length === 0}
-            className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-50 text-primary hover:bg-blue-100 transition-all rounded text-xs font-bold border border-blue-100 disabled:opacity-50"
-          >
-            <Plus className="w-3.5 h-3.5" />
-            Add Step
-          </button>
+      <div className="max-w-3xl mx-auto bg-white rounded-lg border border-slate-200/90 shadow-2xs overflow-hidden">
+        <div className="p-4 border-b border-slate-200/90 flex items-center justify-between bg-slate-50">
+          <div>
+            <h2 className="text-xs font-mono font-bold text-slate-700 uppercase tracking-wider">Sequential Routing Steps</h2>
+            <p className="text-[11px] text-slate-400 mt-0.5">Determine material transfer precedence across workcenters.</p>
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={handleAutoSequence}
+              disabled={machines.length < 2}
+              className="px-2.5 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold rounded-md border border-slate-300 transition-all disabled:opacity-50"
+              title="Automatically arrange steps based on coordinate progression"
+            >
+              Auto-Sequence Along Floor
+            </button>
+            <button
+              onClick={handleAddStep}
+              disabled={machines.length === 0}
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-md text-xs font-semibold shadow-xs disabled:opacity-50"
+            >
+              <Plus className="w-3.5 h-3.5" />
+              Add Stage
+            </button>
+          </div>
         </div>
 
         {machines.length === 0 ? (
@@ -183,23 +203,26 @@ export default function ProductionFlow() {
 
       {/* Progress sequence connector timeline preview */}
       {localSteps.length >= 2 && (
-        <div className="max-w-3xl mx-auto bg-slate-900 rounded-custom p-6 shadow-premium text-white space-y-4">
-          <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider">Flow Sequence Timeline</h3>
-          <div className="flex flex-wrap items-center gap-2 py-2">
+        <div className="max-w-3xl mx-auto bg-slate-900 rounded-lg p-5 border border-slate-800 text-white space-y-3 shadow-sm">
+          <div className="flex items-center justify-between border-b border-slate-800 pb-2">
+            <h3 className="text-[11px] font-mono font-bold text-slate-400 uppercase tracking-wider">Production Flow Chain</h3>
+            <span className="text-[10px] font-mono text-blue-400 bg-blue-950 px-2 py-0.5 rounded border border-blue-900">
+              {localSteps.length} Sequential Stages
+            </span>
+          </div>
+          <div className="flex flex-wrap items-center gap-2 py-1">
             {localSteps.map((machId, idx) => {
               const m = machines.find(mac => mac.id === machId);
               if (!m) return null;
               return (
                 <React.Fragment key={idx}>
-                  {idx > 0 && <span className="text-slate-600 font-bold text-sm">→</span>}
-                  <div className="px-3 py-1.5 bg-slate-800 border border-slate-700 rounded text-xs font-mono font-semibold flex items-center gap-1.5">
-                    <span>
-                      {m.machineType === 'Input' ? '📦' :
-                       m.machineType === 'Processing' ? '⚙️' :
-                       m.machineType === 'Assembly' ? '🤝' :
-                       m.machineType === 'Logistics' ? '🗳️' : '🔍'}
+                  {idx > 0 && <span className="text-blue-500 font-bold text-xs font-mono">→</span>}
+                  <div className="px-2.5 py-1.5 bg-slate-950 border border-slate-800 rounded-md text-xs font-mono font-semibold flex items-center gap-2">
+                    <span className="w-4 h-4 rounded bg-blue-600/20 text-blue-400 border border-blue-500/30 flex items-center justify-center text-[10px] font-bold">
+                      {idx + 1}
                     </span>
-                    <span>{m.machineName}</span>
+                    <span className="text-slate-200">{m.machineName}</span>
+                    <span className="text-[9px] text-slate-400">({m.machineType})</span>
                   </div>
                 </React.Fragment>
               );
