@@ -3,15 +3,25 @@
   "version": "1.0.0",
   "private": true,
   "scripts": {
-    "install:server": "npm.cmd install --prefix server",
-    "install:client": "npm.cmd install --prefix client",
-    "install:all": "npm.cmd run install-server && npm.cmd run install-client",
-    "start:server": "npm.cmd run start --prefix server",
-    "dev:server": "npm.cmd run dev --prefix server",
-    "dev:client": "npm.cmd run dev --prefix client",
-    "dev": "npx concurrently --kill-others \"npm.cmd run start:server\" \"npm.cmd run dev:client\""
+    "install:server": "npm install --prefix server",
+    "install:client": "npm install --prefix client",
+    "install:all": "npm run install:server && npm run install:client",
+    "start:server": "npm run start --prefix server",
+    "dev:server": "npm run dev --prefix server",
+    "dev:client": "npm run dev --prefix client",
+    "dev": "concurrently --kill-others \"npm run dev:server\" \"npm run dev:client\"",
+    "test": "node tests/test-runner.js && node tests/integration.test.mjs",
+    "lint": "npm run lint --prefix server && npm run lint --prefix client",
+    "lint:fix": "npm run lint:fix --prefix server && npm run lint:fix --prefix client",
+    "typecheck": "npm run typecheck --prefix client"
   },
   "devDependencies": {
-    "concurrently": "^8.2.2"
+    "@types/node": "^26.6.5",
+    "concurrently": "^8.2.2",
+    "eslint": "^10.13.0",
+    "typescript": "^7.0.2"
+  },
+  "dependencies": {
+    "express-rate-limit": "^8.7.1"
   }
 }
