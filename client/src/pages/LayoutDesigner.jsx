@@ -28,9 +28,14 @@ import {
   Package,
   Boxes,
   Database,
-  Crosshair
+  Crosshair,
+  MousePointer,
+  Hand,
+  FolderOpen,
+  ArrowRight
 } from 'lucide-react';
 import PRESET_TEMPLATES from '../utils/presetTemplates';
+import { INDUSTRY_CATALOGS, getAllIndustryCatalogs, detectIndustryCatalog } from '../utils/industryCatalogs';
 import { useTelemetry } from '../context/TelemetryContext';
 import LiveTelemetryBadge from '../components/LiveTelemetryBadge';
 import MachineTelemetryDrawer from '../components/MachineTelemetryDrawer';
@@ -40,15 +45,36 @@ import FactoryMinimap from '../components/FactoryMinimap';
 import { getOrthogonalPath } from '../utils/flowRouting';
 
 // Proportional CAD footprints per machine classification (in meters)
-const getMachineDimensions = (type) => {
+const getMachineDimensions = (machOrType) => {
+  let type = machOrType;
+  if (typeof machOrType === 'object' && machOrType !== null) {
+    if (machOrType.w && machOrType.h) return { w: machOrType.w, h: machOrType.h };
+    // Check if machine matches any known industry machinery
+    const allMachs = Object.values(INDUSTRY_CATALOGS).flatMap(c => c.machinery);
+    const matched = allMachs.find(m => machOrType.machineName && machOrType.machineName.toLowerCase().includes(m.name.split(' ')[0].toLowerCase()));
+    if (matched) return { w: matched.w, h: matched.h };
+    type = machOrType.machineType;
+  }
   switch (type) {
-    case 'Input': return { w: 3.4, h: 2.4 };
-    case 'Processing': return { w: 3.8, h: 2.8 };
-    case 'Assembly': return { w: 3.6, h: 3.0 };
-    case 'Quality': return { w: 3.2, h: 2.4 };
-    case 'Logistics': return { w: 4.4, h: 2.4 };
-    case 'Storage': return { w: 4.2, h: 2.6 };
-    default: return { w: 3.4, h: 2.4 };
+    case 'Input': return { w: 4.2, h: 2.8 };
+    case 'Processing': return { w: 4.5, h: 3.0 };
+    case 'Assembly': return { w: 4.8, h: 3.2 };
+    case 'Quality': return { w: 3.4, h: 2.4 };
+    case 'Logistics': return { w: 4.6, h: 2.8 };
+    case 'Storage': return { w: 5.0, h: 3.5 };
+    default: return { w: 4.0, h: 2.8 };
+  }
+};
+
+const getTypeIcon = (type) => {
+  switch (type) {
+    case 'Input': return Box;
+    case 'Processing': return Cpu;
+    case 'Assembly': return Zap;
+    case 'Quality': return ShieldCheck;
+    case 'Logistics': return Package;
+    case 'Storage': return Boxes;
+    default: return Wrench;
   }
 };
 
@@ -96,6 +122,9 @@ export default function LayoutDesigner() {
   const [isPanningCanvas, setIsPanningCanvas] = useState(false);
   const [panStart, setPanStart] = useState({ x: 0, y: 0, scrollLeft: 0, scrollTop: 0 });
 
+  // Industry Profile Selection & Dynamic Machinery Catalog
+  const [selectedIndustryKey, setSelectedIndustryKey] = useState('water_purification');
+
   // Load details on mount
   useEffect(() => {
     if (id) {
@@ -103,9 +132,24 @@ export default function LayoutDesigner() {
     }
   }, [id, loadFactoryDetails]);
 
+  // Auto-detect and sync industry catalog with active factory
+  useEffect(() => {
+    if (activeFactory) {
+      const detected = detectIndustryCatalog(activeFactory);
+      setSelectedIndustryKey(detected.id);
+    }
+  }, [activeFactory]);
+
+  const currentCatalog = INDUSTRY_CATALOGS[selectedIndustryKey] || INDUSTRY_CATALOGS.water_purification;
+
   const handleLoadPresetTemplate = async (template) => {
     if (!activeFactory) return;
     setShowPresetMenu(false);
+
+    // Sync selected industry with loaded preset
+    if (INDUSTRY_CATALOGS[template.id]) {
+      setSelectedIndustryKey(template.id);
+    }
 
     if (machines.length > 0) {
       const confirmClear = window.confirm(`Loading "${template.name}" will clear all existing placed nodes. Proceed?`);
@@ -146,34 +190,25 @@ export default function LayoutDesigner() {
 
   const selectedMachine = machines.find(m => m.id === selectedMachineId);
 
-  // Machine Library with Vector Icons
-  const machineTemplates = [
-    { name: 'Raw Material Dock', type: 'Input', category: 'Production', icon: Box, w: 3.4, h: 2.4 },
-    { name: 'Precision CNC Mill', type: 'Processing', category: 'Production', icon: Cpu, w: 3.8, h: 2.8 },
-    { name: 'Drilling & Boring Unit', type: 'Processing', category: 'Production', icon: Wrench, w: 3.8, h: 2.8 },
-    { name: 'Robotic Welding Cell', type: 'Assembly', category: 'Production', icon: Zap, w: 3.6, h: 3.0 },
-    { name: 'Manual Assembly Bench', type: 'Assembly', category: 'Production', icon: Layers, w: 3.6, h: 2.6 },
-    { name: 'Optical CMM Inspection', type: 'Quality', category: 'Logistics & Storage', icon: ShieldCheck, w: 3.2, h: 2.4 },
-    { name: 'Automated Packaging', type: 'Logistics', category: 'Logistics & Storage', icon: Package, w: 4.4, h: 2.4 },
-    { name: 'High-Bay ASRS Racks', type: 'Storage', category: 'Logistics & Storage', icon: Boxes, w: 4.2, h: 2.6 },
-    { name: 'Buffer Staging Zone', type: 'Storage', category: 'Logistics & Storage', icon: Database, w: 4.0, h: 2.6 }
-  ];
-
   const handleAddTemplate = async (template) => {
     if (!activeFactory) return;
     const spawnX = Math.round(activeFactory.length / 2);
     const spawnY = Math.round(activeFactory.width / 2);
 
+    const prefix = template.name.split(' ')[0];
+    const existingCount = machines.filter(m => m.machineName.startsWith(prefix)).length;
+    const displayName = existingCount > 0 ? `${template.name} #${existingCount + 1}` : template.name;
+
     const newMachine = await addMachine({
-      machineName: `${template.name.split(' ')[0]} ${machines.filter(m => m.machineName.startsWith(template.name.split(' ')[0])).length + 1}`,
+      machineName: displayName,
       machineType: template.type,
       x: spawnX,
       y: spawnY,
       orientation: 0,
-      status: 'Idle',
-      throughput: template.type === 'Processing' ? 140 : 100,
+      status: 'Running',
+      throughput: template.defaultThroughput || (template.type === 'Processing' ? 140 : 100),
       health: 'Optimal',
-      load: 50
+      load: 65
     });
 
     if (newMachine) {
@@ -332,60 +367,117 @@ export default function LayoutDesigner() {
   return (
     <div className={`flex-1 flex flex-col h-screen overflow-hidden ${isDark ? 'bg-slate-950 text-slate-100' : 'bg-slate-100 text-slate-800'}`}>
       
-      {/* Top Application Toolbar */}
-      <div className={`h-14 border-b flex items-center justify-between px-4 z-20 shrink-0 shadow-sm gap-2 select-none ${
-        isDark ? 'bg-slate-900/95 border-slate-800' : 'bg-white border-slate-200'
+      {/* Top Application Toolbar - Clean Industrial CAD Command Ribbon */}
+      <div className={`h-12 border-b flex items-center justify-between px-3 z-20 shrink-0 gap-2 select-none text-xs ${
+        isDark ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200'
       }`}>
-        {/* Left: Project title & CAD info */}
-        <div className="flex items-center gap-2 shrink-0">
-          <div className="flex items-center gap-1.5 px-2.5 py-1 rounded bg-cyan-950/60 border border-cyan-800/80 text-cyan-400 text-xs font-mono font-bold">
-            <Crosshair className="w-3.5 h-3.5" />
-            <span>GRID {activeFactory.length}×{activeFactory.width}m</span>
+        {/* Left Section: Tool Selection, Grid Geometry & Snapping */}
+        <div className="flex items-center gap-1.5 shrink-0">
+          {/* Tool Mode: Pointer vs Pan */}
+          <div className={`flex items-center p-0.5 rounded-md border ${
+            isDark ? 'bg-slate-950 border-slate-800' : 'bg-slate-100 border-slate-200'
+          }`}>
+            <button
+              onClick={() => setActiveTool('select')}
+              title="Selection Tool (V)"
+              className={`px-2 py-1 rounded text-[11px] font-semibold flex items-center gap-1 transition-all ${
+                activeTool === 'select'
+                  ? isDark ? 'bg-blue-600 text-white shadow-xs' : 'bg-white text-slate-900 shadow-xs'
+                  : isDark ? 'text-slate-400 hover:text-slate-200' : 'text-slate-500 hover:text-slate-900'
+              }`}
+            >
+              <MousePointer className="w-3 h-3" />
+              <span className="hidden sm:inline">Select</span>
+            </button>
+            <button
+              onClick={() => setActiveTool('pan')}
+              title="Pan Canvas (H / Spacebar)"
+              className={`px-2 py-1 rounded text-[11px] font-semibold flex items-center gap-1 transition-all ${
+                activeTool === 'pan'
+                  ? isDark ? 'bg-blue-600 text-white shadow-xs' : 'bg-white text-slate-900 shadow-xs'
+                  : isDark ? 'text-slate-400 hover:text-slate-200' : 'text-slate-500 hover:text-slate-900'
+              }`}
+            >
+              <Hand className="w-3 h-3" />
+              <span className="hidden sm:inline">Pan</span>
+            </button>
           </div>
 
+          <div className="h-4 w-[1px] bg-slate-700/40 mx-1 hidden sm:block" />
+
+          {/* Plant Bounding Dimensions */}
+          <div className={`px-2.5 py-1 rounded-md font-mono text-[11px] font-semibold border flex items-center gap-1.5 ${
+            isDark ? 'bg-slate-950/80 border-slate-800 text-slate-300' : 'bg-slate-50 border-slate-200 text-slate-700'
+          }`}>
+            <Crosshair className="w-3 h-3 text-blue-500" />
+            <span>{activeFactory.length}×{activeFactory.width}m</span>
+          </div>
+
+          {/* Snap to Grid Toggle */}
           <button 
             onClick={() => setSnapToGrid(!snapToGrid)}
-            className={`h-8 px-2.5 rounded text-xs font-mono font-semibold border transition-all flex items-center shrink-0 ${
+            className={`px-2.5 py-1 rounded-md text-[11px] font-mono font-medium border transition-all flex items-center gap-1 ${
               snapToGrid 
-                ? 'bg-cyan-500/20 text-cyan-300 border-cyan-500/50' 
-                : isDark ? 'bg-slate-800 text-slate-400 border-slate-700' : 'bg-slate-100 text-slate-500 border-slate-300'
+                ? isDark ? 'bg-blue-950/60 text-blue-400 border-blue-800/80' : 'bg-blue-50 text-blue-700 border-blue-200'
+                : isDark ? 'bg-slate-950/50 text-slate-500 border-slate-800' : 'bg-slate-100 text-slate-500 border-slate-200'
             }`}
           >
-            SNAP: {snapToGrid ? '0.5m' : 'OFF'}
+            <span>Snap</span>
+            <span className="font-bold">{snapToGrid ? '0.5m' : 'OFF'}</span>
           </button>
 
-          {/* Industry Preset Selector */}
+          {/* Safety Buffer Zones Toggle */}
+          <button
+            onClick={() => setShowSafetyZones(!showSafetyZones)}
+            className={`px-2.5 py-1 rounded-md text-[11px] font-medium border transition-all flex items-center gap-1.5 ${
+              showSafetyZones 
+                ? isDark ? 'bg-amber-950/40 text-amber-300 border-amber-800/80' : 'bg-amber-50 text-amber-800 border-amber-200'
+                : isDark ? 'bg-slate-950/50 text-slate-500 border-slate-800' : 'bg-slate-100 text-slate-500 border-slate-200'
+            }`}
+            title="Toggle OSHA 1.0m Safety Clearance Perimeter"
+          >
+            <Shield className="w-3 h-3" />
+            <span className="hidden md:inline">Clearance</span>
+          </button>
+
+          {/* Industry Preset Template Selector */}
           <div className="relative shrink-0">
             <button
               onClick={() => setShowPresetMenu(!showPresetMenu)}
-              className="h-8 px-3 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white rounded text-xs font-sans font-bold flex items-center gap-1.5 transition-all shadow-sm"
+              className={`h-7 px-2.5 rounded-md text-[11px] font-semibold border flex items-center gap-1.5 transition-all ${
+                isDark 
+                  ? 'bg-slate-800 hover:bg-slate-700 border-slate-700 text-slate-200' 
+                  : 'bg-white hover:bg-slate-50 border-slate-300 text-slate-700 shadow-2xs'
+              }`}
             >
-              <Sparkles className="w-3.5 h-3.5" />
-              <span>Presets</span>
-              <ChevronDown className="w-3 h-3 opacity-80" />
+              <FolderOpen className="w-3 h-3 text-blue-500" />
+              <span>Plant Archetypes</span>
+              <ChevronDown className="w-3 h-3 opacity-60" />
             </button>
 
             {showPresetMenu && (
-              <div className={`absolute top-full left-0 mt-2 w-72 rounded-lg shadow-2xl border z-50 p-2 space-y-1 ${
-                isDark ? 'bg-slate-900 border-slate-700 text-slate-100' : 'bg-white border-slate-200 text-slate-800'
+              <div className={`absolute top-full left-0 mt-1.5 w-80 rounded-md shadow-xl border z-50 p-1.5 space-y-1 ${
+                isDark ? 'bg-slate-900 border-slate-800 text-slate-100' : 'bg-white border-slate-200 text-slate-800'
               }`}>
-                <div className="text-[10px] font-bold uppercase tracking-wider px-2.5 py-1 text-slate-400">
-                  Pre-configured Layouts
+                <div className="text-[9px] font-mono font-bold uppercase tracking-wider px-2 py-1 text-slate-400 border-b border-slate-800/60">
+                  Select Production Configuration
                 </div>
                 {PRESET_TEMPLATES.map((tmpl) => (
                   <button
                     key={tmpl.id}
                     onClick={() => handleLoadPresetTemplate(tmpl)}
                     className={`w-full text-left p-2 rounded transition-all flex items-start gap-2.5 group ${
-                      isDark ? 'hover:bg-slate-800' : 'hover:bg-blue-50'
+                      isDark ? 'hover:bg-slate-800' : 'hover:bg-slate-50'
                     }`}
                   >
-                    <span className="text-xl">{tmpl.icon}</span>
-                    <div>
+                    <div className="p-1.5 rounded bg-slate-800/80 text-blue-400 font-mono text-xs font-bold shrink-0">
+                      [{tmpl.category.substring(0, 4).toUpperCase()}]
+                    </div>
+                    <div className="min-w-0 flex-1">
                       <div className="text-xs font-bold flex items-center justify-between">
-                        <span className="group-hover:text-cyan-400">{tmpl.name}</span>
-                        <span className="text-[9px] px-1.5 py-0.5 bg-slate-800 text-slate-400 rounded font-mono">
-                          {tmpl.machines.length} Nodes
+                        <span className="truncate group-hover:text-blue-400">{tmpl.name}</span>
+                        <span className="text-[9px] px-1 py-0.2 rounded font-mono text-slate-400 bg-slate-800/60">
+                          {tmpl.machines.length} nodes
                         </span>
                       </div>
                       <div className="text-[10px] text-slate-400 line-clamp-1 mt-0.5">
@@ -397,68 +489,34 @@ export default function LayoutDesigner() {
               </div>
             )}
           </div>
-
-          <LiveTelemetryBadge minimal={true} />
-          <button
-            onClick={() => navigate(`/telemetry/${activeFactory.id}`)}
-            className="h-8 px-2.5 bg-slate-900 hover:bg-slate-800 text-slate-200 rounded text-xs font-mono font-bold flex items-center gap-1.5 transition-all border border-slate-700"
-            title="Open Live MES Command Center"
-          >
-            <Radio className="w-3.5 h-3.5 text-emerald-400 animate-pulse" />
-            <span className="hidden sm:inline">MES FLEET</span>
-          </button>
         </div>
 
-        {/* Right Section: View Toggles & Simulation */}
-        <div className="flex items-center gap-2 shrink-0">
-          {/* Theme Switcher */}
-          <button
-            onClick={() => setCanvasTheme(isDark ? 'light' : 'dark')}
-            className={`h-8 px-2.5 rounded border text-xs font-mono font-semibold flex items-center gap-1.5 transition-all ${
-              isDark ? 'bg-slate-800 text-amber-300 border-slate-700 hover:bg-slate-700' : 'bg-slate-100 text-slate-700 border-slate-300 hover:bg-slate-200'
-            }`}
-            title="Toggle Digital Twin Dark / Clean CAD Blueprint"
-          >
-            {isDark ? <Sun className="w-3.5 h-3.5 text-amber-400" /> : <Moon className="w-3.5 h-3.5 text-indigo-600" />}
-            <span className="hidden md:inline">{isDark ? 'LIGHT' : 'DARK'}</span>
-          </button>
-
-          {/* Safety Buffer Zones Toggle */}
-          <button
-            onClick={() => setShowSafetyZones(!showSafetyZones)}
-            className={`h-8 px-2.5 rounded border text-xs font-mono font-semibold flex items-center gap-1.5 transition-all ${
-              showSafetyZones 
-                ? 'bg-amber-500/20 text-amber-400 border-amber-500/50' 
-                : isDark ? 'bg-slate-800 text-slate-400 border-slate-700' : 'bg-slate-100 text-slate-500 border-slate-300'
-            }`}
-            title="Toggle OSHA Safety Clearance Buffers"
-          >
-            <Shield className="w-3.5 h-3.5" />
-            <span className="hidden md:inline">OSHA BUFFER</span>
-          </button>
-
-          {/* Simulation Toggle */}
+        {/* Right Section: Simulation Engine, Speed, Heatmap & View Mode */}
+        <div className="flex items-center gap-1.5 shrink-0">
+          {/* Simulation Play / Pause */}
           <button
             onClick={() => setIsSimulating(!isSimulating)}
-            className={`h-8 px-3 rounded text-xs font-bold transition-all flex items-center gap-1.5 shadow-sm ${
+            className={`h-7 px-2.5 rounded-md text-[11px] font-semibold transition-all flex items-center gap-1.5 shadow-2xs border ${
               isSimulating 
-                ? 'bg-emerald-600 text-white hover:bg-emerald-500' 
-                : isDark ? 'bg-slate-800 text-slate-300 border border-slate-700' : 'bg-slate-100 text-slate-700 border border-slate-300'
+                ? 'bg-emerald-600 text-white border-emerald-500 hover:bg-emerald-500' 
+                : isDark ? 'bg-slate-800 text-slate-300 border-slate-700' : 'bg-slate-100 text-slate-700 border-slate-300'
             }`}
           >
-            {isSimulating ? <Pause className="w-3.5 h-3.5 fill-current" /> : <Play className="w-3.5 h-3.5 fill-current" />}
-            <span>{isSimulating ? 'SIMULATING' : 'PAUSED'}</span>
+            {isSimulating ? <Pause className="w-3 h-3 fill-current" /> : <Play className="w-3 h-3 fill-current" />}
+            <span className="hidden sm:inline">{isSimulating ? 'SIMULATING' : 'PAUSED'}</span>
           </button>
 
           {/* Speed Selector */}
-          <div className={`h-8 flex items-center p-0.5 rounded border ${isDark ? 'bg-slate-800 border-slate-700' : 'bg-slate-100 border-slate-300'}`}>
+          <div className={`h-7 flex items-center p-0.5 rounded-md border ${
+            isDark ? 'bg-slate-950 border-slate-800' : 'bg-slate-100 border-slate-200'
+          }`}>
             {[1, 2, 4].map(s => (
               <button
                 key={s}
                 onClick={() => setSimSpeed(s)}
-                className={`h-7 px-2 text-[10px] font-mono font-bold rounded transition-all ${
+                className={`h-6 px-1.5 text-[10px] font-mono font-bold rounded transition-all ${
                   simSpeed === s 
-                    ? isDark ? 'bg-cyan-500 text-slate-950 shadow-sm' : 'bg-white text-slate-900 shadow-sm'
+                    ? isDark ? 'bg-blue-600 text-white shadow-2xs' : 'bg-white text-slate-900 shadow-2xs'
                     : isDark ? 'text-slate-400 hover:text-slate-200' : 'text-slate-500 hover:text-slate-800'
                 }`}
               >
@@ -467,17 +525,42 @@ export default function LayoutDesigner() {
             ))}
           </div>
 
-          {/* Heatmap Toggle */}
+          {/* Flow Density Heatmap */}
           <button
             onClick={() => setShowHeatmap(!showHeatmap)}
-            className={`h-8 px-2.5 rounded border text-xs font-bold transition-all flex items-center gap-1.5 ${
+            className={`h-7 px-2 rounded-md text-[11px] font-semibold transition-all flex items-center gap-1 border ${
               showHeatmap 
-                ? 'bg-rose-500 text-white border-rose-600 shadow-sm' 
-                : isDark ? 'bg-slate-800 text-slate-400 border-slate-700' : 'bg-white text-slate-600 border-slate-300'
+                ? 'bg-rose-600 text-white border-rose-500 shadow-2xs' 
+                : isDark ? 'bg-slate-950/60 text-slate-400 border-slate-800 hover:text-slate-200' : 'bg-white text-slate-600 border-slate-200'
             }`}
+            title="Toggle Material Congestion Heatmap"
           >
-            <Flame className={`w-3.5 h-3.5 ${showHeatmap ? 'fill-current' : ''}`} />
-            <span className="hidden md:inline">HEATMAP</span>
+            <Flame className={`w-3 h-3 ${showHeatmap ? 'fill-current' : ''}`} />
+            <span className="hidden lg:inline">Heatmap</span>
+          </button>
+
+          <div className="h-4 w-[1px] bg-slate-700/40 mx-1 hidden sm:block" />
+
+          {/* Theme Switcher: Blueprint vs Digital Twin */}
+          <button
+            onClick={() => setCanvasTheme(isDark ? 'light' : 'dark')}
+            className={`h-7 px-2.5 rounded-md border text-[11px] font-semibold flex items-center gap-1.5 transition-all ${
+              isDark ? 'bg-slate-800 text-slate-300 border-slate-700 hover:bg-slate-700' : 'bg-white text-slate-700 border-slate-300 hover:bg-slate-100 shadow-2xs'
+            }`}
+            title="Toggle Clean CAD Blueprint / Digital Twin Dark"
+          >
+            {isDark ? <Sun className="w-3 h-3 text-amber-400" /> : <Moon className="w-3 h-3 text-slate-600" />}
+            <span className="hidden lg:inline">{isDark ? 'Blueprint' : 'Digital Twin'}</span>
+          </button>
+
+          {/* SCADA Telemetry Console Link */}
+          <button
+            onClick={() => navigate(`/telemetry/${activeFactory.id}`)}
+            className="h-7 px-2.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-md text-[11px] font-mono font-semibold flex items-center gap-1.5 transition-all border border-slate-700"
+            title="Open Live Industrial Telemetry Console"
+          >
+            <Radio className="w-3 h-3 text-emerald-400 animate-pulse" />
+            <span className="hidden sm:inline">SCADA</span>
           </button>
         </div>
       </div>
@@ -486,51 +569,104 @@ export default function LayoutDesigner() {
       <div className="flex-1 flex overflow-hidden">
         
         {/* Left Side: Industrial Component Library */}
-        <aside className={`w-64 border-r flex flex-col h-full shrink-0 shadow-sm select-none ${
-          isDark ? 'bg-slate-900/90 border-slate-800' : 'bg-white border-slate-200'
+        <aside className={`w-72 border-r flex flex-col h-full shrink-0 shadow-sm select-none ${
+          isDark ? 'bg-slate-900/95 border-slate-800' : 'bg-white border-slate-200'
         }`}>
-          <div className={`p-3.5 border-b ${isDark ? 'border-slate-800' : 'border-slate-200'}`}>
-            <h2 className="font-bold text-xs uppercase tracking-wider text-cyan-400">Component Library</h2>
-            <p className="text-[10px] text-slate-400 mt-0.5">Click industrial units to insert onto CAD canvas.</p>
+          {/* Header & Industry Profile Switcher */}
+          <div className={`p-3.5 border-b space-y-2.5 ${isDark ? 'border-slate-800 bg-slate-950/40' : 'border-slate-200 bg-slate-50'}`}>
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Industry Machinery</span>
+              <span className={`text-[9px] px-1.5 py-0.5 rounded font-mono font-bold ${
+                isDark ? 'bg-cyan-950 text-cyan-300 border border-cyan-800' : 'bg-blue-50 text-blue-700 border border-blue-200'
+              }`}>
+                {currentCatalog.badge}
+              </span>
+            </div>
+
+            {/* Industry Catalog Dropdown */}
+            <select
+              value={selectedIndustryKey}
+              onChange={(e) => setSelectedIndustryKey(e.target.value)}
+              className={`w-full text-xs font-bold rounded-lg p-2 border transition-all cursor-pointer outline-none ${
+                isDark 
+                  ? 'bg-slate-800 border-slate-700 text-slate-100 focus:border-cyan-400' 
+                  : 'bg-white border-slate-300 text-slate-800 focus:border-blue-500 shadow-xs'
+              }`}
+            >
+              {getAllIndustryCatalogs().map(cat => (
+                <option key={cat.id} value={cat.id} className={isDark ? 'bg-slate-900 text-slate-100' : 'bg-white text-slate-900'}>
+                  {cat.icon} {cat.name}
+                </option>
+              ))}
+            </select>
+
+            <p className="text-[10px] text-slate-400 leading-tight">
+              {currentCatalog.description}
+            </p>
           </div>
           
+          {/* Categorized Equipment List */}
           <div className="flex-1 overflow-y-auto p-3 space-y-4">
-            {['Production', 'Logistics & Storage'].map(cat => (
-              <div key={cat} className="space-y-2">
-                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
-                  {cat}
-                </span>
-                <div className="space-y-1.5">
-                  {machineTemplates.filter(t => t.category === cat).map((tmpl) => {
-                    const IconComponent = tmpl.icon;
-                    return (
-                      <button
-                        key={tmpl.name}
-                        onClick={() => handleAddTemplate(tmpl)}
-                        className={`w-full flex items-center justify-between p-2.5 rounded border transition-all text-left text-xs font-semibold ${
-                          isDark 
-                            ? 'bg-slate-800/80 border-slate-700/80 hover:border-cyan-500/80 hover:bg-slate-800 text-slate-200' 
-                            : 'bg-slate-50 border-slate-200 hover:border-blue-500 hover:bg-blue-50/50 text-slate-700'
-                        }`}
-                      >
-                        <div className="flex items-center gap-2.5">
-                          <div className={`p-1.5 rounded ${isDark ? 'bg-slate-900 text-cyan-400' : 'bg-white text-blue-600 shadow-2xs'}`}>
-                            <IconComponent className="w-4 h-4" />
+            {currentCatalog.categories.map(cat => {
+              const items = currentCatalog.machinery.filter(m => m.category === cat);
+              if (items.length === 0) return null;
+              return (
+                <div key={cat} className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
+                      {cat}
+                    </span>
+                    <span className="text-[9px] font-mono text-slate-500">
+                      {items.length} units
+                    </span>
+                  </div>
+                  <div className="space-y-1.5">
+                    {items.map((tmpl) => {
+                      const IconComponent = getTypeIcon(tmpl.type);
+                      return (
+                        <button
+                          key={tmpl.id}
+                          onClick={() => handleAddTemplate(tmpl)}
+                          title={`${tmpl.description} (Footprint: ${tmpl.w}m × ${tmpl.h}m)`}
+                          className={`w-full flex items-center justify-between p-2.5 rounded-lg border transition-all text-left text-xs font-semibold group ${
+                            isDark 
+                              ? 'bg-slate-800/80 border-slate-700/80 hover:border-cyan-500 hover:bg-slate-800 text-slate-200' 
+                              : 'bg-slate-50 border-slate-200 hover:border-blue-500 hover:bg-blue-50/50 text-slate-700'
+                          }`}
+                        >
+                          <div className="flex items-center gap-2.5 min-w-0">
+                            <div className={`p-1.5 rounded-md shrink-0 ${isDark ? 'bg-slate-900 text-cyan-400' : 'bg-white text-blue-600 shadow-2xs'}`}>
+                              <IconComponent className="w-4 h-4" />
+                            </div>
+                            <div className="min-w-0">
+                              <div className="text-xs font-bold leading-tight truncate group-hover:text-cyan-400">
+                                {tmpl.name}
+                              </div>
+                              <div className="text-[9px] font-mono text-slate-400 flex items-center gap-1.5 mt-0.5">
+                                <span className={`px-1 py-0.2 rounded text-[8px] font-semibold ${
+                                  tmpl.type === 'Input' ? 'bg-emerald-950/60 text-emerald-400' :
+                                  tmpl.type === 'Processing' ? 'bg-blue-950/60 text-blue-400' :
+                                  tmpl.type === 'Assembly' ? 'bg-amber-950/60 text-amber-400' :
+                                  tmpl.type === 'Quality' ? 'bg-purple-950/60 text-purple-400' :
+                                  'bg-slate-950/60 text-slate-400'
+                                }`}>
+                                  {tmpl.type}
+                                </span>
+                                <span>•</span>
+                                <span className="truncate">{tmpl.defaultThroughput} {tmpl.flowUnit || 'u/h'}</span>
+                              </div>
+                            </div>
                           </div>
-                          <div>
-                            <div className="text-xs font-bold leading-tight">{tmpl.name}</div>
-                            <div className="text-[9px] font-mono text-slate-400">{tmpl.type}</div>
-                          </div>
-                        </div>
-                        <span className="text-[9px] font-mono text-slate-400 bg-slate-950/40 px-1.5 py-0.5 rounded">
-                          {tmpl.w}×{tmpl.h}m
-                        </span>
-                      </button>
-                    );
-                  })}
+                          <span className="text-[9px] font-mono text-slate-400 bg-slate-950/40 px-1.5 py-0.5 rounded shrink-0 ml-1">
+                            {tmpl.w}×{tmpl.h}m
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </aside>
 
@@ -874,6 +1010,7 @@ export default function LayoutDesigner() {
                       <div className="flex-1 flex items-center justify-center p-1 overflow-hidden">
                         <MachineSchematic 
                           type={mach.machineType} 
+                          name={mach.machineName}
                           status={mach.status} 
                           isSelected={isSelected} 
                           isDark={isDark} 
@@ -1156,10 +1293,10 @@ export default function LayoutDesigner() {
 
                   <button
                     onClick={() => setInspectingMachine(selectedMachine)}
-                    className="w-full py-2 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white rounded text-xs font-bold transition-all shadow-sm flex items-center justify-center gap-1.5"
+                    className="w-full py-1.5 bg-slate-800 hover:bg-slate-700 text-blue-300 rounded text-xs font-semibold transition-all border border-slate-700 flex items-center justify-center gap-1.5 shadow-2xs"
                   >
-                    <Activity className="w-3.5 h-3.5" />
-                    <span>Inspect Live Waveforms</span>
+                    <Activity className="w-3.5 h-3.5 text-blue-400" />
+                    <span>Inspect Diagnostic Waveforms</span>
                   </button>
                 </div>
               )}
@@ -1188,40 +1325,44 @@ export default function LayoutDesigner() {
         </aside>
       </div>
 
-      {/* Bottom Action Footer Bar */}
-      <footer className={`h-14 border-t flex items-center justify-between px-6 z-10 shrink-0 select-none ${
-        isDark ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200'
+      {/* Bottom CAD Status Bar & Execution Action Strip */}
+      <footer className={`h-11 border-t flex items-center justify-between px-4 z-10 shrink-0 select-none text-xs ${
+        isDark ? 'bg-slate-950 border-slate-800 text-slate-400' : 'bg-slate-100 border-slate-200 text-slate-600'
       }`}>
-        <div className="flex items-center gap-2 text-xs font-bold text-slate-400">
-          <span className="w-2 h-2 rounded-full bg-cyan-400 animate-pulse"></span>
-          <span>Layout: <span className="text-white">{activeFactory.name}</span></span>
-          <span className="text-slate-700 mx-2">|</span>
-          <span className="font-mono text-[11px]">Nodes placed: {machines.length}</span>
+        {/* Left: Live Coordinate Readout & Calibration */}
+        <div className="flex items-center gap-3 font-mono text-[11px]">
+          <div className="flex items-center gap-1.5">
+            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+            <span className={`font-bold ${isDark ? 'text-slate-200' : 'text-slate-800'}`}>
+              {cursorPos.x !== null ? `X: ${cursorPos.x.toFixed(1)}m, Y: ${cursorPos.y.toFixed(1)}m` : 'X: --, Y: --'}
+            </span>
+          </div>
+          <span className="text-slate-700">|</span>
+          <span>Scale: 1:100</span>
+          <span className="text-slate-700 hidden sm:inline">|</span>
+          <span className="hidden sm:inline">Nodes: <strong className={isDark ? 'text-slate-200' : 'text-slate-900'}>{machines.length}</strong></span>
+          <span className="text-slate-700 hidden md:inline">|</span>
+          <span className="hidden md:inline">Flow: <strong className={isDark ? 'text-slate-200' : 'text-slate-900'}>{flow.length} steps</strong></span>
         </div>
 
-        <div className="flex gap-3">
+        {/* Right: Actions */}
+        <div className="flex items-center gap-2">
           <button
             onClick={handleResetLayout}
-            className={`px-3 py-1.5 rounded text-xs font-bold border transition-all ${
-              isDark ? 'border-slate-700 text-slate-400 hover:bg-slate-800' : 'border-slate-300 text-slate-600 hover:bg-slate-100'
+            className={`px-2.5 py-1 rounded text-xs font-semibold border transition-all ${
+              isDark ? 'border-slate-800 text-slate-400 hover:bg-slate-900' : 'border-slate-300 text-slate-600 hover:bg-white'
             }`}
           >
-            Reset
+            Clear Nodes
           </button>
-          <button
-            onClick={() => navigate('/')}
-            className={`px-3 py-1.5 rounded text-xs font-bold border transition-all ${
-              isDark ? 'border-slate-700 text-slate-300 hover:bg-slate-800' : 'border-slate-300 text-slate-700 hover:bg-slate-100'
-            }`}
-          >
-            Dashboard
-          </button>
+
           <button
             onClick={handleCalculateLayout}
             disabled={machines.length === 0}
-            className="px-5 py-1.5 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 rounded transition-all text-xs font-black shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
+            className="px-3.5 py-1.5 bg-blue-600 hover:bg-blue-500 text-white rounded text-xs font-semibold shadow-xs disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-1.5 transition-all"
           >
-            Calculate Flow & Efficiency
+            <span>Run OR Flow Audit</span>
+            <ArrowRight className="w-3.5 h-3.5" />
           </button>
         </div>
       </footer>
