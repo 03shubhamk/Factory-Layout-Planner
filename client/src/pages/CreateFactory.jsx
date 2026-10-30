@@ -143,46 +143,55 @@ export default function CreateFactory() {
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-start">
         {/* Form Container */}
-        <div className="lg:col-span-2 bg-white rounded-custom border border-slate-200 shadow-soft p-8 space-y-6">
+        <div className="lg:col-span-2 bg-white rounded-lg border border-slate-200 shadow-xs p-6 space-y-6">
           {/* Preset Industry Template Quick Selector */}
-          <div className="space-y-3 bg-slate-50 p-4 rounded-xl border border-slate-200">
+          <div className="space-y-3 bg-slate-50 p-4 rounded-lg border border-slate-200">
             <div className="flex items-center justify-between">
-              <span className="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
-                <Sparkles className="w-3.5 h-3.5 text-blue-600" />
-                <span>Start from Industry Preset (Optional)</span>
+              <span className="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center gap-1.5 font-mono">
+                <span>Production Archetype Configuration</span>
               </span>
               {selectedPresetId && (
                 <button
                   type="button"
                   onClick={() => setSelectedPresetId(null)}
-                  className="text-[10px] font-bold text-slate-500 hover:text-slate-700 underline"
+                  className="text-[10px] font-bold text-slate-500 hover:text-slate-800 underline"
                 >
                   Clear Selection
                 </button>
               )}
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
               {PRESET_TEMPLATES.map((tmpl) => {
                 const isSelected = selectedPresetId === tmpl.id;
+                const sectorTag = tmpl.id === 'water_purification' ? 'WATER' :
+                  tmpl.id === 'automotive' ? 'AUTO' :
+                  tmpl.id === 'smt' ? 'SMT' : 'PHARMA';
                 return (
                   <button
                     key={tmpl.id}
                     type="button"
                     onClick={() => handleSelectPreset(tmpl)}
-                    className={`p-3 rounded-lg border text-left transition-all relative flex items-start gap-3 ${
+                    className={`p-3 rounded-md border text-left transition-all relative flex items-start gap-3 ${
                       isSelected
-                        ? 'border-blue-600 bg-blue-50/50 ring-2 ring-blue-600/20'
-                        : 'border-slate-200 bg-white hover:border-slate-300 shadow-sm'
+                        ? 'border-blue-600 bg-blue-50/70 ring-1 ring-blue-600'
+                        : 'border-slate-200 bg-white hover:border-slate-300 shadow-2xs'
                     }`}
                   >
-                    <span className="text-2xl">{tmpl.icon}</span>
+                    <div className={`px-2 py-1 rounded text-[10px] font-mono font-bold shrink-0 ${
+                      isSelected ? 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-700 border border-slate-200'
+                    }`}>
+                      {sectorTag}
+                    </div>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center justify-between">
                         <span className="text-xs font-bold text-slate-900 truncate">{tmpl.name}</span>
                         {isSelected && <Check className="w-3.5 h-3.5 text-blue-600 shrink-0" />}
                       </div>
                       <span className="text-[10px] text-slate-500 line-clamp-1 mt-0.5">{tmpl.description}</span>
+                      <div className="text-[9px] font-mono text-slate-400 mt-1">
+                        {tmpl.defaultDimensions.length}×{tmpl.defaultDimensions.width}m • {tmpl.machines.length} nodes
+                      </div>
                     </div>
                   </button>
                 );
