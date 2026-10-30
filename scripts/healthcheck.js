@@ -7,7 +7,7 @@ const port = process.env.PORT || 5000;
 const options = {
   host: '127.0.0.1',
   port: port,
-  path: '/api/layouts',
+  path: '/health',
   timeout: 3000,
   method: 'GET'
 };
