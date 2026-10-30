@@ -84,87 +84,92 @@ export default function Dashboard() {
       </div>
 
       {/* Stats Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         {/* Total Projects */}
-        <div className="bg-white p-6 rounded-custom border border-slate-200/80 shadow-soft flex items-center gap-4">
-          <div className="w-12 h-12 rounded-lg bg-blue-50 text-primary flex items-center justify-center">
-            <Building2 className="w-6 h-6" />
+        <div className="bg-white p-5 rounded-lg border border-slate-200/90 shadow-2xs flex items-center gap-4">
+          <div className="w-10 h-10 rounded-md bg-blue-50 text-blue-600 flex items-center justify-center shrink-0">
+            <Building2 className="w-5 h-5" />
           </div>
           <div>
-            <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider block">Total Layouts</span>
-            <span className="text-2xl font-bold text-slate-900">{dashboardStats.totalProjects}</span>
+            <span className="text-[11px] font-mono font-semibold text-slate-400 uppercase tracking-wider block">Total Facilities</span>
+            <span className="text-2xl font-bold font-mono text-slate-900">{dashboardStats.totalProjects}</span>
           </div>
         </div>
 
         {/* Average Efficiency */}
-        <div className="bg-white p-6 rounded-custom border border-slate-200/80 shadow-soft flex items-center gap-4">
-          <div className="w-12 h-12 rounded-lg bg-emerald-50 text-success flex items-center justify-center">
-            <BarChart2 className="w-6 h-6" />
+        <div className="bg-white p-5 rounded-lg border border-slate-200/90 shadow-2xs flex items-center gap-4">
+          <div className="w-10 h-10 rounded-md bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0">
+            <BarChart2 className="w-5 h-5" />
           </div>
           <div>
-            <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider block">Avg. Efficiency</span>
-            <span className="text-2xl font-bold text-slate-900">{dashboardStats.avgEfficiency}%</span>
+            <span className="text-[11px] font-mono font-semibold text-slate-400 uppercase tracking-wider block">Fleet Mean Efficiency</span>
+            <span className="text-2xl font-bold font-mono text-slate-900">{dashboardStats.avgEfficiency}%</span>
           </div>
         </div>
 
         {/* Best Layout */}
-        <div className="bg-white p-6 rounded-custom border border-slate-200/80 shadow-soft flex items-center gap-4">
-          <div className="w-12 h-12 rounded-lg bg-amber-50 text-warning flex items-center justify-center">
-            <Trophy className="w-6 h-6" />
+        <div className="bg-white p-5 rounded-lg border border-slate-200/90 shadow-2xs flex items-center gap-4">
+          <div className="w-10 h-10 rounded-md bg-amber-50 text-amber-600 flex items-center justify-center shrink-0">
+            <Trophy className="w-5 h-5" />
           </div>
           <div className="min-w-0">
-            <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider block">Best Performer</span>
-            <span className="text-lg font-bold text-slate-900 truncate block leading-tight mt-1">
+            <span className="text-[11px] font-mono font-semibold text-slate-400 uppercase tracking-wider block">Optimal Plant</span>
+            <span className="text-base font-bold text-slate-900 truncate block leading-tight mt-0.5">
               {dashboardStats.bestLayout}
             </span>
           </div>
         </div>
 
         {/* Last Updated */}
-        <div className="bg-white p-6 rounded-custom border border-slate-200/80 shadow-soft flex items-center gap-4">
-          <div className="w-12 h-12 rounded-lg bg-slate-50 text-slate-600 flex items-center justify-center">
-            <Clock className="w-6 h-6" />
+        <div className="bg-white p-5 rounded-lg border border-slate-200/90 shadow-2xs flex items-center gap-4">
+          <div className="w-10 h-10 rounded-md bg-slate-100 text-slate-600 flex items-center justify-center shrink-0">
+            <Clock className="w-5 h-5" />
           </div>
           <div>
-            <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider block">Last Updated</span>
-            <span className="text-sm font-bold text-slate-900 block mt-1">{dashboardStats.lastUpdated}</span>
+            <span className="text-[11px] font-mono font-semibold text-slate-400 uppercase tracking-wider block">Last Telemetry Sync</span>
+            <span className="text-xs font-mono font-bold text-slate-700 block mt-1">{dashboardStats.lastUpdated}</span>
           </div>
         </div>
       </div>
 
       {/* Projects List Section */}
-      <div className="bg-white rounded-custom border border-slate-200 shadow-soft overflow-hidden">
-        <div className="p-6 border-b border-slate-200 flex items-center justify-between">
-          <h2 className="text-lg font-bold text-slate-900">Saved Projects</h2>
-          <span className="text-xs text-slate-500 font-mono">Count: {factories.length}</span>
+      <div className="bg-white rounded-lg border border-slate-200/90 shadow-2xs overflow-hidden">
+        <div className="p-5 border-b border-slate-200/90 flex items-center justify-between">
+          <div>
+            <h2 className="text-sm font-bold text-slate-900 tracking-tight">Active Plant Projects</h2>
+            <p className="text-xs text-slate-500 mt-0.5">Manage and launch CAD workspaces for registered facilities.</p>
+          </div>
+          <span className="text-[11px] text-slate-500 font-mono bg-slate-100 px-2 py-0.5 rounded border border-slate-200">
+            {factories.length} Registered
+          </span>
         </div>
 
         {factories.length === 0 ? (
           <div className="p-16 text-center">
             <Building2 className="w-12 h-12 text-slate-300 mx-auto mb-4" />
-            <h3 className="text-base font-semibold text-slate-700">No factory layouts found</h3>
+            <h3 className="text-sm font-semibold text-slate-700">No factory configurations found</h3>
             <p className="text-xs text-slate-400 mt-1 max-w-sm mx-auto">
-              Get started by creating your first factory grid and defining production flows.
+              Get started by creating a new facility floor grid and arranging machinery assets.
             </p>
             <button
               onClick={() => navigate('/create')}
-              className="mt-4 inline-flex items-center gap-2 px-4 py-2 bg-primary text-white text-xs font-semibold rounded-lg hover:bg-primary-dark transition-all"
+              className="mt-4 inline-flex items-center gap-2 px-3.5 py-1.5 bg-blue-600 text-white text-xs font-semibold rounded-md hover:bg-blue-700 transition-all shadow-xs"
             >
               <Plus className="w-4 h-4" />
-              Create Factory Layout
+              Initialize Plant Grid
             </button>
           </div>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-left border-collapse">
               <thead>
-                <tr className="bg-slate-50 text-slate-400 font-semibold text-xs tracking-wider uppercase border-b border-slate-200">
-                  <th className="px-6 py-4">Factory Name</th>
-                  <th className="px-6 py-4">Floor Dimensions</th>
-                  <th className="px-6 py-4 text-center">Placed Nodes</th>
-                  <th className="px-6 py-4 text-center">Efficiency Score</th>
-                  <th className="px-6 py-4">Created Date</th>
-                  <th className="px-6 py-4 text-right">Actions</th>
+                <tr className="bg-slate-50 text-slate-500 font-mono font-bold text-[10px] tracking-wider uppercase border-b border-slate-200">
+                  <th className="px-5 py-3">Facility Designation</th>
+                  <th className="px-5 py-3">Floor Geometry</th>
+                  <th className="px-5 py-3 text-center">Asset Density</th>
+                  <th className="px-5 py-3 text-center">Audit Efficiency</th>
+                  <th className="px-5 py-3">Created Date</th>
+                  <th className="px-5 py-3 text-right">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 text-sm">
