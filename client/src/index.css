@@ -22,17 +22,23 @@
   }
 }
 
-/* Custom Dotted Grid for Blueprint Layouts */
+/* Custom Dotted & Precision CAD Grids for Layouts */
 .blueprint-grid {
-  background-size: 24px 24px;
-  background-image: radial-gradient(circle, #e2e8f0 1.5px, transparent 1.5px);
+  background-size: 24px 24px, 120px 120px;
+  background-image: 
+    radial-gradient(circle, #cbd5e1 1.2px, transparent 1.2px),
+    linear-gradient(to right, #f1f5f9 1px, transparent 1px),
+    linear-gradient(to bottom, #f1f5f9 1px, transparent 1px);
   background-color: #ffffff;
 }
 
 .blueprint-grid-dark {
-  background-size: 24px 24px;
-  background-image: radial-gradient(circle, #334155 1.5px, transparent 1.5px);
-  background-color: #0f172a;
+  background-size: 24px 24px, 120px 120px;
+  background-image: 
+    radial-gradient(circle, #334155 1.2px, transparent 1.2px),
+    linear-gradient(to right, #1e293b 1px, transparent 1px),
+    linear-gradient(to bottom, #1e293b 1px, transparent 1px);
+  background-color: #0b0f19;
 }
 
 /* Toast container override styles for premium MES vibe */
@@ -43,12 +49,12 @@
 /* SVG Path Dash and Particle Motion Keyframes */
 @keyframes flowDash {
   to {
-    stroke-dashoffset: -20;
+    stroke-dashoffset: -24;
   }
 }
 
 .animate-flow-dash {
-  animation: flowDash 1s linear infinite;
+  animation: flowDash 0.8s linear infinite;
 }
 
 @keyframes pulseGlow {
@@ -57,12 +63,30 @@
     transform: scale(1);
   }
   50% {
-    opacity: 0.8;
-    transform: scale(1.15);
+    opacity: 0.75;
+    transform: scale(1.1);
   }
 }
 
 .animate-pulse-glow {
-  animation: pulseGlow 2s ease-in-out infinite;
+  animation: pulseGlow 2.5s ease-in-out infinite;
 }
 
+@keyframes safetyStripes {
+  from {
+    background-position: 0 0;
+  }
+  to {
+    background-position: 28px 0;
+  }
+}
+
+.safety-hatch-pattern {
+  background: repeating-linear-gradient(
+    45deg,
+    rgba(245, 158, 11, 0.08),
+    rgba(245, 158, 11, 0.08) 6px,
+    rgba(245, 158, 11, 0.02) 6px,
+    rgba(245, 158, 11, 0.02) 12px
+  );
+}
